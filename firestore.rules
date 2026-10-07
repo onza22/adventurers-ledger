@@ -1,0 +1,24 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Signed in with Google AND their email is on the allow-list.
+    function allowed() {
+      return request.auth != null
+        && request.auth.token.email != null
+        && exists(/databases/$(database)/documents/allowed_users/$(request.auth.token.email.lower()));
+    }
+
+    // Each person may check their own allow-list entry. Nobody can write it from the app:
+    // you add people in the Firebase console (Firestore -> allowed_users -> Add document, id = their email).
+    match /allowed_users/{email} {
+      allow read: if request.auth != null && request.auth.token.email.lower() == email;
+      allow write: if false;
+    }
+
+    // Everything a person stores lives under users/{their uid}/... and only they can touch it.
+    match /users/{uid}/{document=**} {
+      allow read, write: if allowed() && request.auth.uid == uid;
+    }
+  }
+}
