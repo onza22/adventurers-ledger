@@ -90,6 +90,14 @@ main { flex: 1; padding: 14px 16px calc(84px + env(safe-area-inset-bottom, 0px))
 .entry.npc::before { background: var(--brass); }
 .entry.quest::before { background: var(--accent); }
 .entry.item::before { background: var(--fg-2); }
+.entry.map::before { background: var(--good); }
+.chip.map { color: var(--good); border-color: var(--good); background: transparent; }
+.page .pe .k.map { color: var(--good); }
+.entry.map .pic { max-height: none; object-fit: contain; background: var(--bg-3); cursor: zoom-in; }
+.entry .pic { cursor: zoom-in; }
+.lightbox { position: fixed; inset: 0; z-index: 30; background: rgba(0,0,0,.92); overflow: auto; touch-action: pinch-zoom; display: grid; place-items: center; padding: 12px; }
+.lightbox img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.lightbox button { position: fixed; top: calc(12px + env(safe-area-inset-top, 0px)); right: 12px; width: 40px; height: 40px; border-radius: 50%; border: 0; background: rgba(255,255,255,.15); color: #fff; font-size: 1.4rem; }
 .entry.closed { opacity: .55; }
 .entries { touch-action: pan-y; }
 .entry { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
@@ -216,6 +224,7 @@ textarea { min-height: 84px; resize: vertical; }
         <button aria-pressed="false" data-f="npc">NPCs</button>
         <button aria-pressed="false" data-f="item">Items</button>
         <button aria-pressed="false" data-f="quest">Quests</button>
+        <button aria-pressed="false" data-f="map">Maps</button>
       </div>
       <div class="counts" id="counts"></div>
       <div id="editorSlot"></div>
@@ -294,11 +303,12 @@ const fs = getFirestore(app);
 const $ = (s, r = document) => r.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
-const TYPES = { npc: 'NPC', item: 'Item', quest: 'Quest' };
+const TYPES = { npc: 'NPC', item: 'Item', quest: 'Quest', map: 'Map' };
 const STATUS = {
   npc: [['friendly','Friendly','ok'],['neutral','Neutral',''],['suspicious','Suspicious','warn'],['hostile','Hostile','bad'],['dead','Dead','']],
   item: [['have','In my pack','ok'],['party','Party has it',''],['seen','Seen / rumoured','warn'],['lost','Lost or sold','']],
-  quest: [['active','Active','ok'],['side','Side quest','warn'],['done','Completed',''],['failed','Failed','bad']]
+  quest: [['active','Active','ok'],['side','Side quest','warn'],['done','Completed',''],['failed','Failed','bad']],
+  map: [['current','Where we are','ok'],['explored','Explored',''],['rumoured','Rumoured','warn'],['old','Out of date','']]
 };
 const CLOSED = ['dead','lost','done','failed'];
 
@@ -318,10 +328,11 @@ function shrink(file, max, quality) {
   });
 }
 const blobToDataUrl = b => new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(b); });
-async function storeImage(file) {
-  let q = .8, blob = await shrink(file, 900, q);
-  while (blob.size > 320000 && q > .4) { q -= .15; blob = await shrink(file, 900, q); }
-  if (blob.size > 320000) blob = await shrink(file, 600, .6);
+async function storeImage(file, big) {
+  const max = big ? 1600 : 900, cap = big ? 700000 : 320000;
+  let q = .8, blob = await shrink(file, max, q);
+  while (blob.size > cap && q > .4) { q -= .15; blob = await shrink(file, max, q); }
+  if (blob.size > cap) blob = await shrink(file, big ? 1100 : 600, .6);
   return { imgData: await blobToDataUrl(blob) };
 }
 
@@ -500,8 +511,8 @@ function openEditor(e) {
         <label>Type <select id="eType">${Object.entries(TYPES).map(([k, v]) => `<option value="${k}" ${k === type ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
         <label>Status <select id="eStatus"></select></label>
       </div>
-      <label>Name <input type="text" id="eName" required value="${esc(e.name)}" placeholder="${type === 'npc' ? 'Garrick the ferryman' : type === 'item' ? 'Cracked amulet of warding' : 'Find the missing caravan'}"></label>
-      <label>In one line <input type="text" id="eSummary" value="${esc(e.summary)}" placeholder="${type === 'npc' ? 'Owes us a favour after the bridge incident' : type === 'item' ? 'Hums near undead; found in the crypt' : 'From the mayor of Hollowbrook, 200gp reward'}"></label>
+      <label>Name <input type="text" id="eName" required value="${esc(e.name)}" placeholder="${type === 'npc' ? 'Garrick the ferryman' : type === 'item' ? 'Cracked amulet of warding' : type === 'map' ? 'Hollowbrook and the marshes' : 'Find the missing caravan'}"></label>
+      <label>In one line <input type="text" id="eSummary" value="${esc(e.summary)}" placeholder="${type === 'npc' ? 'Owes us a favour after the bridge incident' : type === 'item' ? 'Hums near undead; found in the crypt' : type === 'map' ? 'Bought from the cartographer; X marks the old watchtower' : 'From the mayor of Hollowbrook, 200gp reward'}"></label>
       <div class="row">
         <label>Where <input type="text" id="eWhere" value="${esc(e.where)}" placeholder="Hollowbrook, the Drowned Rat"></label>
         <label>Tags <input type="text" id="eTags" value="${esc((e.tags || []).join(', '))}" placeholder="guild, reward"></label>
@@ -527,7 +538,7 @@ function openEditor(e) {
     const f = $('#eFile').files[0]; if (!f) return;
     $('#eNote').textContent = 'Preparing…';
     try {
-      const r = await storeImage(f);
+      const r = await storeImage(f, $('#eType').value === 'map');
       pendingImg = r; $('#eThumb').src = r.imgData; $('#eThumb').hidden = false;
       $('#eNote').textContent = '';
       $('#ePick').textContent = 'Change photo';
@@ -567,8 +578,8 @@ function highlight(text, q) {
 function renderEntries() {
   const q = $('#search').value.trim().toLowerCase();
   const mine = Object.entries(S.entries).map(([id, e]) => ({ id, ...e })).filter(e => e.charId === S.current);
-  const counts = { npc: 0, item: 0, quest: 0 }; mine.forEach(e => { if (counts[e.type] != null) counts[e.type]++; });
-  $('#counts').innerHTML = S.current ? `<span><b>${counts.npc}</b> NPCs</span><span><b>${counts.item}</b> items</span><span><b>${counts.quest}</b> quests</span>` : '';
+  const counts = { npc: 0, item: 0, quest: 0, map: 0 }; mine.forEach(e => { if (counts[e.type] != null) counts[e.type]++; });
+  $('#counts').innerHTML = S.current ? `<span><b>${counts.npc}</b> NPCs</span><span><b>${counts.item}</b> items</span><span><b>${counts.quest}</b> quests</span><span><b>${counts.map}</b> maps</span>` : '';
   const list = mine
     .filter(e => filter === 'all' || e.type === filter)
     .filter(e => !q || [e.name, e.summary, e.where, e.notes, (e.tags || []).join(' ')].join(' ').toLowerCase().includes(q))
@@ -592,8 +603,15 @@ function renderEntries() {
     </article>`;
   }).join('') + (list.length > 1 && !q && filter === 'all' ? '<div class="hint">Press and hold a card to reorder</div>' : '');
 }
+function openLightbox(src) {
+  const lb = document.createElement('div'); lb.className = 'lightbox';
+  lb.innerHTML = `<img src="${src}" alt=""><button aria-label="Close">×</button>`;
+  lb.addEventListener('click', ev => { if (ev.target.tagName !== 'IMG') lb.remove(); });
+  document.body.appendChild(lb);
+}
 $('#entries').addEventListener('click', e => {
   if (dragMoved) { dragMoved = false; return; }
+  const pic = e.target.closest('img.pic'); if (pic) { openLightbox(pic.src); return; }
   const b = e.target.closest('[data-edit]'); if (!b) return;
   openEditor({ id: b.dataset.edit, ...S.entries[b.dataset.edit] });
 });
@@ -700,7 +718,7 @@ $('#bookNext').onclick = () => turn(1);
 let tx = null;
 $('#book').addEventListener('touchstart', e => { tx = e.touches[0].clientX; }, { passive: true });
 $('#book').addEventListener('touchend', e => { if (tx == null) return; const dx = e.changedTouches[0].clientX - tx; tx = null; if (Math.abs(dx) > 50) turn(dx < 0 ? 1 : -1); });
-$('#book').addEventListener('click', e => { const r = $('#book').getBoundingClientRect(); const x = e.clientX - r.left; if (x < r.width * .25) turn(-1); else if (x > r.width * .75) turn(1); });
+$('#book').addEventListener('click', e => { const pic = e.target.closest('img.pic'); if (pic) { openLightbox(pic.src); return; } const r = $('#book').getBoundingClientRect(); const x = e.clientX - r.left; if (x < r.width * .25) turn(-1); else if (x > r.width * .75) turn(1); });
 
 function renderAll() { renderHeader(); renderChars(); renderEntries(); if (!$('#panel-book').hidden) renderBook(); $('#newEntry').hidden = $('#panel-journal').hidden || !S.current; }
 
