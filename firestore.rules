@@ -8,17 +8,55 @@ service cloud.firestore {
         && request.auth.token.email != null
         && exists(/databases/$(database)/documents/allowed_users/$(request.auth.token.email.lower()));
     }
+    function isMember(cid) {
+      return request.auth.uid in get(/databases/$(database)/documents/campaigns/$(cid)).data.members;
+    }
 
-    // Each person may check their own allow-list entry. Nobody can write it from the app:
-    // you add people in the Firebase console (Firestore -> allowed_users -> Add document, id = their email).
+    // Allow-list: each person may check their own entry. You add people in the Firebase console.
     match /allowed_users/{email} {
       allow read: if request.auth != null && request.auth.token.email.lower() == email;
       allow write: if false;
     }
 
-    // Everything a person stores lives under users/{their uid}/... and only they can touch it.
+    // Private data: characters and private journals live under users/{uid}.
     match /users/{uid}/{document=**} {
       allow read, write: if allowed() && request.auth.uid == uid;
+    }
+
+    // Join codes: CODE -> campaign id. Anyone allowed can look a code up; only the owner creates/removes.
+    match /codes/{code} {
+      allow read: if allowed();
+      allow create: if allowed()
+        && get(/databases/$(database)/documents/campaigns/$(request.resource.data.campaignId)).data.ownerUid == request.auth.uid;
+      allow delete: if allowed()
+        && get(/databases/$(database)/documents/campaigns/$(resource.data.campaignId)).data.ownerUid == request.auth.uid;
+    }
+
+    // Campaigns.
+    match /campaigns/{cid} {
+      // Any allowed person can read a campaign document (they need the id, which comes from a code).
+      allow read: if allowed();
+      // Create: you are the owner and the only member.
+      allow create: if allowed()
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.members == [request.auth.uid];
+      // Owner can change anything except who the owner is.
+      allow update: if allowed()
+        && resource.data.ownerUid == request.auth.uid
+        && request.resource.data.ownerUid == resource.data.ownerUid;
+      // Anyone allowed can add or remove THEMSELVES (join / leave), touching only members + memberNames.
+      allow update: if allowed()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members', 'memberNames'])
+        && request.resource.data.members.toSet().difference(resource.data.members.toSet()).hasOnly([request.auth.uid])
+        && resource.data.members.toSet().difference(request.resource.data.members.toSet()).hasOnly([request.auth.uid])
+        && request.resource.data.ownerUid == resource.data.ownerUid;
+      // Only the owner deletes.
+      allow delete: if allowed() && resource.data.ownerUid == request.auth.uid;
+
+      // The shared journal: members read and write.
+      match /entries/{eid} {
+        allow read, write: if allowed() && isMember(cid);
+      }
     }
   }
 }

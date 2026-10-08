@@ -188,6 +188,17 @@ textarea { min-height: 84px; resize: vertical; }
 .book-nav button { background: var(--bg-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px; font-weight: 600; }
 .book-nav button:disabled { opacity: .4; cursor: default; }
 
+/* campaigns */
+.camplist { display: grid; gap: 8px; }
+.camp { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: grid; gap: 6px; }
+.camp .hd { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.camp .hd b { font-size: 1.05rem; }
+.camp .code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .15em; font-weight: 700; color: var(--brass); background: var(--bg-3); padding: 2px 8px; border-radius: 6px; }
+.camp .members { display: flex; flex-wrap: wrap; gap: 6px; }
+.camp .members .chip button { background: none; border: 0; color: var(--bad); padding: 0 0 0 4px; font-weight: 700; }
+.entry .by { font-size: .78rem; color: var(--fg-2); }
+.page .pe .by { font-family: var(--body); font-size: .72rem; color: var(--ink-2); }
+.migrate { background: var(--bg-3); border: 1px solid var(--brass); border-radius: 12px; padding: 12px; display: grid; gap: 8px; }
 /* sign-in gate */
 .gate { position: fixed; inset: 0; z-index: 20; background: var(--bg); display: grid; place-items: center; padding: 24px; }
 .gate .box { max-width: 360px; width: 100%; display: grid; gap: 14px; text-align: center; }
@@ -248,11 +259,26 @@ textarea { min-height: 84px; resize: vertical; }
           <label>Race &amp; class <input type="text" id="cSub" placeholder="Tiefling Wizard 4"></label>
           <label>D&amp;D Beyond character ID <input type="text" id="cId" inputmode="numeric" placeholder="123456789"></label>
         </div>
+        <label>Campaign <select id="cCamp"><option value="">None (private journal)</option></select></label>
         <p class="help">The ID is the number at the end of your character's URL on D&amp;D Beyond. It links the journal to that character and gives you a one-tap jump to the sheet. <span id="idHint"></span></p>
         <div class="foot">
           <div id="charDelWrap"></div>
           <div class="right"><button class="btn ghost" id="cCancel" hidden>Cancel</button><button class="btn primary" id="cSave">Save character</button></div>
         </div>
+      </div>
+      <div class="card" id="campCard">
+        <h2>Campaigns</h2>
+        <p class="help">A campaign is a shared journal. Create one and give your party the code, or enter a code you've been given. Then pick the campaign on your character.</p>
+        <div class="camplist" id="camplist"></div>
+        <div class="row">
+          <label>New campaign <input type="text" id="campName" placeholder="Curse of Strahd"></label>
+          <button class="btn" id="campCreate" style="align-self:end">Create</button>
+        </div>
+        <div class="row">
+          <label>Join with a code <input type="text" id="campCode" placeholder="ABC123" autocapitalize="characters" maxlength="6"></label>
+          <button class="btn" id="campJoin" style="align-self:end">Join</button>
+        </div>
+        <div class="status-line" id="campMsg"></div>
       </div>
       <div class="actions-row"><button class="btn small ghost" id="exportBtn">Export backup</button><button class="btn small ghost" id="signOut">Sign out</button></div>
       <div class="status-line" id="syncStatus"></div>
@@ -283,7 +309,7 @@ textarea { min-height: 84px; resize: vertical; }
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
-import { getFirestore, collection, doc, getDoc, setDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
+import { getFirestore, collection, doc, getDoc, getDocs, setDoc, deleteDoc, onSnapshot, query, where, updateDoc, arrayUnion, arrayRemove, deleteField, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDs8npR0uzIQ7_RjeM_I4dIa9ZQXiVdHZY",
@@ -343,22 +369,44 @@ applyTheme(theme);
 $('#themeBtn').onclick = () => { theme = theme === 'dark' ? 'light' : 'dark'; applyTheme(theme); try { localStorage.setItem('ledger-theme', theme); } catch {} };
 
 /* ---------- state + Firebase ---------- */
-let S = { characters: {}, entries: {}, current: null };
-let user = null, filter = 'all', editingChar = null, unsubs = [];
+let S = { characters: {}, entries: {}, campaigns: {}, current: null };
+let user = null, filter = 'all', editingChar = null, unsubs = [], unsubEntries = null, entriesSource = '';
 const userCol = name => collection(fs, 'users', user.uid, name);
 const userDoc = (name, id) => doc(fs, 'users', user.uid, name, id);
+const curChar = () => S.characters[S.current];
+const curCamp = () => { const c = curChar(); return c && c.campaignId && S.campaigns[c.campaignId] ? S.campaigns[c.campaignId] : null; };
+const entryDoc = id => { const camp = curCamp(); return camp ? doc(fs, 'campaigns', camp.id, 'entries', id) : userDoc('entries', id); };
+const myName = () => (user && (user.displayName || user.email)) || 'Someone';
 function setStatus(t) { $('#syncStatus').textContent = t; }
 const clean = o => JSON.parse(JSON.stringify(o));
 async function put(path, data) {
   const [name, id] = path.split('/');
-  try { await setDoc(userDoc(name, id), clean(data)); } catch (e) { setStatus('Could not save: ' + (e.code || e.message)); }
+  try {
+    if (name === 'entries') await setDoc(entryDoc(id), clean(data));
+    else await setDoc(userDoc(name, id), clean(data));
+  } catch (e) { setStatus('Could not save: ' + (e.code || e.message)); }
 }
 async function del(path) {
   const [name, id] = path.split('/');
-  try { await deleteDoc(userDoc(name, id)); } catch (e) { setStatus('Could not delete: ' + (e.code || e.message)); }
+  try { await deleteDoc(name === 'entries' ? entryDoc(id) : userDoc(name, id)); } catch (e) { setStatus('Could not delete: ' + (e.code || e.message)); }
 }
 function rememberCurrent() { try { localStorage.setItem('ledger-current', S.current || ''); } catch {} }
 function lsSave() { rememberCurrent(); }
+
+function listenEntries() {
+  const camp = curCamp();
+  const src = camp ? 'camp:' + camp.id : (S.current ? 'me' : '');
+  if (src === entriesSource) return;
+  entriesSource = src;
+  if (unsubEntries) { unsubEntries(); unsubEntries = null; }
+  S.entries = {}; renderEntries(); renderChars();
+  if (!src) return;
+  const col = camp ? collection(fs, 'campaigns', camp.id, 'entries') : userCol('entries');
+  unsubEntries = onSnapshot(col, snap => {
+    const next = {}; snap.forEach(x => { next[x.id] = x.data(); });
+    S.entries = next; renderEntries(); renderChars(); if (!$('#panel-book').hidden && !flipping) renderBook();
+  }, e => setStatus('Sync error: ' + e.code));
+}
 
 function listen() {
   unsubs.forEach(u => u()); unsubs = [];
@@ -367,13 +415,103 @@ function listen() {
     const next = {}; snap.forEach(x => { next[x.id] = x.data(); });
     S.characters = next;
     if (!S.characters[S.current]) S.current = Object.keys(next)[0] || null;
-    renderAll(); rememberCurrent();
-    if (!S.current && $('#panel-journal').hidden === false && !Object.keys(next).length) showTab('chars');
+    renderAll(); rememberCurrent(); listenEntries();
+    if (!S.current && !Object.keys(next).length) showTab('chars');
   }, e => setStatus('Sync error: ' + e.code)));
-  unsubs.push(onSnapshot(userCol('entries'), snap => {
-    const next = {}; snap.forEach(x => { next[x.id] = x.data(); });
-    S.entries = next; renderEntries(); renderChars(); if (!$('#panel-book').hidden && !flipping) renderBook();
-  }, e => setStatus('Sync error: ' + e.code)));
+  unsubs.push(onSnapshot(query(collection(fs, 'campaigns'), where('members', 'array-contains', user.uid)), snap => {
+    const next = {}; snap.forEach(x => { next[x.id] = { id: x.id, ...x.data() }; });
+    S.campaigns = next; renderCamps(); renderCampOptions(); renderHeader(); listenEntries(); renderEntries();
+  }, e => { $('#campMsg').textContent = 'Campaign sync error: ' + e.code; }));
+}
+
+/* ---------- campaigns ---------- */
+const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const makeCode = () => Array.from({ length: 6 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join('');
+function campMsg(t) { $('#campMsg').textContent = t; }
+function renderCamps() {
+  const list = Object.values(S.campaigns).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+  $('#camplist').innerHTML = list.length ? list.map(c => {
+    const owner = c.ownerUid === user.uid;
+    const members = (c.members || []).map(uid => `<span class="chip">${esc((c.memberNames || {})[uid] || 'Member')}${uid === user.uid ? ' (you)' : ''}${owner && uid !== user.uid ? `<button data-kick="${c.id}:${uid}" aria-label="Remove">×</button>` : ''}</span>`).join('');
+    const n = Object.values(S.characters).filter(x => x.campaignId === c.id).length;
+    return `<div class="camp">
+      <div class="hd"><b>${esc(c.name)}</b><span class="code" title="Join code">${esc(c.code)}</span></div>
+      <div class="members">${members}</div>
+      <div class="actions-row" style="justify-content:flex-start">
+        <button class="btn small ghost" data-copy="${esc(c.code)}">Copy code</button>
+        ${owner ? `<button class="btn small ghost danger" data-delcamp="${c.id}">Delete campaign</button>` : `<button class="btn small ghost danger" data-leave="${c.id}">Leave</button>`}
+        ${n ? `<span class="help" style="align-self:center">${n} of your characters</span>` : ''}
+      </div>
+    </div>`;
+  }).join('') : '<div class="help">You\'re not in any campaigns yet.</div>';
+}
+function renderCampOptions() {
+  const sel = $('#cCamp'); const cur = sel.value;
+  sel.innerHTML = '<option value="">None (private journal)</option>' + Object.values(S.campaigns).map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+  sel.value = cur && S.campaigns[cur] ? cur : '';
+}
+$('#campCreate').onclick = async () => {
+  const name = $('#campName').value.trim(); if (!name) { $('#campName').focus(); return; }
+  const code = makeCode(); const ref = doc(collection(fs, 'campaigns'));
+  try {
+    await setDoc(ref, { name, code, ownerUid: user.uid, members: [user.uid], memberNames: { [user.uid]: myName() }, createdAt: Date.now() });
+    await setDoc(doc(fs, 'codes', code), { campaignId: ref.id });
+    $('#campName').value = ''; campMsg(`Created "${name}". Share the code ${code} with your party.`);
+  } catch (e) { campMsg('Could not create: ' + (e.code || e.message)); }
+};
+$('#campJoin').onclick = async () => {
+  const code = $('#campCode').value.trim().toUpperCase(); if (code.length < 4) { $('#campCode').focus(); return; }
+  campMsg('Looking up code…');
+  try {
+    const c = await getDoc(doc(fs, 'codes', code));
+    if (!c.exists()) { campMsg('No campaign has that code. Check it with whoever gave it to you.'); return; }
+    const cid = c.data().campaignId;
+    await updateDoc(doc(fs, 'campaigns', cid), { members: arrayUnion(user.uid), ['memberNames.' + user.uid]: myName() });
+    $('#campCode').value = ''; campMsg('Joined. Now pick the campaign on your character.');
+  } catch (e) { campMsg('Could not join: ' + (e.code || e.message)); }
+};
+$('#camplist').addEventListener('click', async e => {
+  const b = e.target.closest('button'); if (!b) return;
+  try {
+    if (b.dataset.copy) { try { await navigator.clipboard.writeText(b.dataset.copy); campMsg('Code copied.'); } catch { campMsg('Code: ' + b.dataset.copy); } }
+    else if (b.dataset.leave) {
+      if (b.textContent !== 'Really leave?') { b.textContent = 'Really leave?'; return; }
+      const cid = b.dataset.leave;
+      Object.entries(S.characters).forEach(([id, ch]) => { if (ch.campaignId === cid) { ch.campaignId = null; put('characters/' + id, ch); } });
+      await updateDoc(doc(fs, 'campaigns', cid), { members: arrayRemove(user.uid), ['memberNames.' + user.uid]: deleteField() });
+      campMsg('Left the campaign.');
+    } else if (b.dataset.kick) {
+      const [cid, uid] = b.dataset.kick.split(':');
+      await updateDoc(doc(fs, 'campaigns', cid), { members: arrayRemove(uid), ['memberNames.' + uid]: deleteField() });
+    } else if (b.dataset.delcamp) {
+      if (b.textContent !== 'Really delete? Entries go too.') { b.textContent = 'Really delete? Entries go too.'; return; }
+      const cid = b.dataset.delcamp, camp = S.campaigns[cid];
+      const snap = await getDocs(collection(fs, 'campaigns', cid, 'entries'));
+      let batch = writeBatch(fs), i = 0;
+      for (const d of snap.docs) { batch.delete(d.ref); if (++i % 400 === 0) { await batch.commit(); batch = writeBatch(fs); } }
+      await batch.commit();
+      Object.entries(S.characters).forEach(([id, ch]) => { if (ch.campaignId === cid) { ch.campaignId = null; put('characters/' + id, ch); } });
+      if (camp && camp.code) await deleteDoc(doc(fs, 'codes', camp.code)).catch(() => {});
+      await deleteDoc(doc(fs, 'campaigns', cid));
+      campMsg('Campaign deleted.');
+    }
+  } catch (err) { campMsg('That didn\'t work: ' + (err.code || err.message)); }
+});
+
+/* move a character's private entries into its campaign */
+async function migratePrivate(charId, cid) {
+  const snap = await getDocs(userCol('entries'));
+  const mine = snap.docs.filter(d => d.data().charId === charId);
+  if (!mine.length) return 0;
+  const ch = S.characters[charId];
+  let batch = writeBatch(fs), i = 0;
+  for (const d of mine) {
+    batch.set(doc(fs, 'campaigns', cid, 'entries', d.id), { ...d.data(), addedBy: user.uid, addedByName: myName(), charName: ch ? ch.name : '' });
+    batch.delete(d.ref);
+    if (++i % 200 === 0) { await batch.commit(); batch = writeBatch(fs); }
+  }
+  await batch.commit();
+  return mine.length;
 }
 
 /* sign-in gate */
@@ -390,7 +528,8 @@ $('#signOut').onclick = () => signOut(auth);
 onAuthStateChanged(auth, async u => {
   unsubs.forEach(x => x()); unsubs = [];
   user = u;
-  if (!u) { gate.hidden = false; $('#signIn').hidden = false; $('#gateMsg').textContent = 'NPCs, items and quests, kept per character and synced wherever you sign in.'; S = { characters: {}, entries: {}, current: null }; renderAll(); return; }
+  if (unsubEntries) { unsubEntries(); unsubEntries = null; entriesSource = ''; }
+  if (!u) { gate.hidden = false; $('#signIn').hidden = false; $('#gateMsg').textContent = 'NPCs, items and quests, kept per character and synced wherever you sign in.'; S = { characters: {}, entries: {}, campaigns: {}, current: null }; renderAll(); return; }
   let ok = false;
   try { const a = await getDoc(doc(fs, 'allowed_users', (u.email || '').toLowerCase())); ok = a.exists(); } catch { ok = false; }
   if (!ok) {
@@ -406,7 +545,7 @@ onAuthStateChanged(auth, async u => {
 
 /* backup */
 $('#exportBtn').onclick = () => {
-  const data = { exportedAt: new Date().toISOString(), characters: S.characters, entries: S.entries };
+  const data = { exportedAt: new Date().toISOString(), characters: S.characters, campaigns: S.campaigns, journal: entriesSource, entries: S.entries };
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
   a.download = 'adventurers-ledger-' + new Date().toISOString().slice(0, 10) + '.json';
@@ -435,37 +574,39 @@ function renderHeader() {
   const c = S.characters[S.current];
   $('#avatar').innerHTML = c && imgSrc(c) ? `<img src="${imgSrc(c)}" alt="">` : esc(c ? (c.name || '?').trim().charAt(0).toUpperCase() : '?');
   $('#charName').textContent = c ? c.name : 'No character selected';
-  $('#charSub').innerHTML = c ? [esc(c.sub), c.ddbId ? `<a href="${esc(ddbUrl(c.ddbId))}" target="_blank" rel="noopener">Open sheet ↗</a>` : ''].filter(Boolean).join(' · ') : 'Add one on the Characters tab';
-  $('#search').placeholder = c ? `Search ${c.name}'s journal` : 'Search';
+  const camp = curCamp();
+  $('#charSub').innerHTML = c ? [esc(c.sub), camp ? `<span style="color:var(--brass)">${esc(camp.name)}</span>` : '', c.ddbId ? `<a href="${esc(ddbUrl(c.ddbId))}" target="_blank" rel="noopener">Open sheet ↗</a>` : ''].filter(Boolean).join(' · ') : 'Add one on the Characters tab';
+  $('#search').placeholder = camp ? `Search the ${camp.name} journal` : c ? `Search ${c.name}'s journal` : 'Search';
 }
 function renderChars() {
   const ids = Object.keys(S.characters);
   const el = $('#charlist');
   el.innerHTML = ids.length ? ids.map(id => {
     const c = S.characters[id];
-    const n = Object.values(S.entries).filter(e => e.charId === id).length;
+    const camp = c.campaignId && S.campaigns[c.campaignId];
+    const n = (id === S.current) ? Object.values(S.entries).filter(e => camp || e.charId === id).length : null;
     return `<button class="charcard" aria-pressed="${id === S.current}" data-pick="${id}">
       <span class="avatar">${imgSrc(c) ? `<img src="${imgSrc(c)}" alt="">` : esc((c.name || '?').charAt(0).toUpperCase())}</span>
-      <span class="t"><b>${esc(c.name)}</b><span>${esc(c.sub || '')}${c.ddbId ? (c.sub ? ' · ' : '') + '#' + esc(c.ddbId) : ''}</span></span>
-      <span class="n">${n} ${n === 1 ? 'entry' : 'entries'}</span>
+      <span class="t"><b>${esc(c.name)}</b><span>${esc(c.sub || '')}${camp ? (c.sub ? ' · ' : '') + esc(camp.name) : ''}</span></span>
+      <span class="n">${n == null ? '' : n + (n === 1 ? ' entry' : ' entries')}</span>
     </button>`;
   }).join('') : '<div class="empty">No characters yet. Add your first one below.</div>';
 }
 $('#charlist').addEventListener('click', e => {
   const b = e.target.closest('[data-pick]'); if (!b) return;
   if (S.current === b.dataset.pick) { startEditChar(b.dataset.pick); return; }
-  S.current = b.dataset.pick; lsSave(); renderAll(); showTab('journal');
+  S.current = b.dataset.pick; lsSave(); renderAll(); listenEntries(); showTab('journal');
 });
 function startEditChar(id) {
   editingChar = id; const c = S.characters[id];
   $('#charFormTitle').textContent = 'Edit character';
-  $('#cName').value = c.name || ''; $('#cSub').value = c.sub || ''; $('#cId').value = c.ddbId || '';
+  $('#cName').value = c.name || ''; $('#cSub').value = c.sub || ''; $('#cId').value = c.ddbId || ''; renderCampOptions(); $('#cCamp').value = c.campaignId && S.campaigns[c.campaignId] ? c.campaignId : '';
   $('#cCancel').hidden = false;
   $('#charDelWrap').innerHTML = `<button class="btn ghost danger small" id="charDel">Delete</button>`;
   $('#charDel').onclick = () => {
     $('#charDelWrap').innerHTML = `<span class="confirm">Delete and its journal? <button class="btn small danger" id="charDelYes">Yes</button><button class="btn small ghost" id="charDelNo">No</button></span>`;
     $('#charDelYes').onclick = () => {
-      Object.entries(S.entries).forEach(([eid, e]) => { if (e.charId === id) { delete S.entries[eid]; del('entries/' + eid); } });
+      getDocs(userCol('entries')).then(snap => { snap.docs.forEach(d => { if (d.data().charId === id) deleteDoc(d.ref).catch(() => {}); }); }).catch(() => {});
       delete S.characters[id]; del('characters/' + id);
       if (S.current === id) S.current = Object.keys(S.characters)[0] || null;
       resetCharForm(); renderAll();
@@ -476,20 +617,32 @@ function startEditChar(id) {
 }
 function resetCharForm() {
   editingChar = null; $('#charFormTitle').textContent = 'Add a character';
-  $('#cName').value = ''; $('#cSub').value = ''; $('#cId').value = ''; $('#cCancel').hidden = true; $('#charDelWrap').innerHTML = ''; $('#idHint').innerHTML = '';
+  $('#cName').value = ''; $('#cSub').value = ''; $('#cId').value = ''; $('#cCamp').value = ''; $('#cCancel').hidden = true; $('#charDelWrap').innerHTML = ''; $('#idHint').innerHTML = '';
 }
 $('#cCancel').onclick = resetCharForm;
 $('#cId').addEventListener('input', () => {
   const id = $('#cId').value.replace(/\D/g, ''); $('#cId').value = id;
   $('#idHint').innerHTML = id ? `Sheet: <a href="${ddbUrl(id)}" target="_blank" rel="noopener">dndbeyond.com/characters/${id}</a>` : '';
 });
-$('#cSave').onclick = () => {
+$('#cSave').onclick = async () => {
   const name = $('#cName').value.trim(); if (!name) { $('#cName').focus(); return; }
   const id = editingChar || uid();
-  S.characters[id] = { name, sub: $('#cSub').value.trim(), ddbId: $('#cId').value.replace(/\D/g, ''), createdAt: S.characters[id]?.createdAt || Date.now() };
-  put('characters/' + id, S.characters[id]);
+  const prev = S.characters[id] || {};
+  const campaignId = $('#cCamp').value || null;
+  S.characters[id] = { ...prev, name, sub: $('#cSub').value.trim(), ddbId: $('#cId').value.replace(/\D/g, ''), campaignId, createdAt: prev.createdAt || Date.now() };
+  await put('characters/' + id, S.characters[id]);
   if (!S.current || !editingChar) S.current = id;
-  resetCharForm(); renderAll(); showTab('journal');
+  const joinedCamp = campaignId && prev.campaignId !== campaignId;
+  resetCharForm(); renderAll(); listenEntries(); showTab('journal');
+  if (joinedCamp) {
+    const snap = await getDocs(userCol('entries')).catch(() => null);
+    const count = snap ? snap.docs.filter(d => d.data().charId === id).length : 0;
+    if (count) {
+      $('#editorSlot').innerHTML = `<div class="migrate"><b>${count} private ${count === 1 ? 'entry' : 'entries'} for ${esc(name)}</b><span class="help">Move ${count === 1 ? 'it' : 'them'} into the campaign journal so the party can see ${count === 1 ? 'it' : 'them'}?</span><div class="actions-row" style="justify-content:flex-start"><button class="btn primary small" id="migYes">Move into campaign</button><button class="btn small ghost" id="migNo">Keep private</button></div></div>`;
+      $('#migYes').onclick = async () => { $('#migYes').disabled = true; try { await migratePrivate(id, campaignId); } catch (e) { setStatus('Move failed: ' + (e.code || e.message)); } $('#editorSlot').innerHTML = ''; };
+      $('#migNo').onclick = () => { $('#editorSlot').innerHTML = ''; };
+    }
+  }
 };
 
 /* ---------- journal ---------- */
@@ -559,7 +712,8 @@ function openEditor(e) {
       summary: $('#eSummary').value.trim(), where: $('#eWhere').value.trim(),
       tags: $('#eTags').value.split(',').map(s => s.trim()).filter(Boolean),
       notes: $('#eNotes').value.trim(), createdAt: e.createdAt || Date.now(), updatedAt: Date.now(),
-      order: e.order ?? Math.min(0, ...Object.values(S.entries).filter(x => x.charId === S.current).map(x => x.order ?? 0)) - 1,
+      addedBy: e.addedBy || user.uid, addedByName: e.addedByName || myName(), charName: e.charName || (curChar() ? curChar().name : ''),
+      order: e.order ?? Math.min(0, ...Object.values(S.entries).map(x => x.order ?? 0)) - 1,
       imgData: pendingImg.imgData || null
     };
     put('entries/' + id, S.entries[id]); closeEditor(); renderEntries(); renderChars();
@@ -577,7 +731,8 @@ function highlight(text, q) {
 }
 function renderEntries() {
   const q = $('#search').value.trim().toLowerCase();
-  const mine = Object.entries(S.entries).map(([id, e]) => ({ id, ...e })).filter(e => e.charId === S.current);
+  const shared = !!curCamp();
+  const mine = Object.entries(S.entries).map(([id, e]) => ({ id, ...e })).filter(e => shared || e.charId === S.current);
   const counts = { npc: 0, item: 0, quest: 0, map: 0 }; mine.forEach(e => { if (counts[e.type] != null) counts[e.type]++; });
   $('#counts').innerHTML = S.current ? `<span><b>${counts.npc}</b> NPCs</span><span><b>${counts.item}</b> items</span><span><b>${counts.quest}</b> quests</span><span><b>${counts.map}</b> maps</span>` : '';
   const list = mine
@@ -598,7 +753,7 @@ function renderEntries() {
       ${e.summary ? `<div class="summary">${highlight(e.summary, q)}</div>` : ''}
       <div class="meta">${st ? `<span class="chip ${st[2]}">${st[1]}</span>` : ''}${e.where ? `<span>${highlight(e.where, q)}</span>` : ''}${(e.tags || []).map(t => `<span class="chip">#${highlight(t, q)}</span>`).join('')}</div>
       ${e.notes ? `<div class="notes">${highlight(e.notes, q)}</div>` : ''}
-      <div class="meta">Added ${fmtDay(e.createdAt)}</div>
+      <div class="by">${shared && e.addedByName ? `Added by ${esc(e.charName || e.addedByName)}${e.addedBy === user.uid ? ' (you)' : e.charName ? ' (' + esc(e.addedByName) + ')' : ''} · ` : 'Added '}${fmtDay(e.createdAt)}</div>
       <button class="edit" data-edit="${e.id}">Edit</button>
     </article>`;
   }).join('') + (list.length > 1 && !q && filter === 'all' ? '<div class="hint">Press and hold a card to reorder</div>' : '');
@@ -669,7 +824,8 @@ const fmtDay = ts => ts ? new Date(ts).toLocaleDateString(undefined, { weekday: 
 const fmtTime = ts => ts ? new Date(ts).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : '';
 let bookPages = [], bookIdx = 0, flipping = false;
 function buildPages() {
-  const mine = Object.entries(S.entries).map(([id, e]) => ({ id, ...e })).filter(e => e.charId === S.current).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+  const shared = !!curCamp();
+  const mine = Object.entries(S.entries).map(([id, e]) => ({ id, ...e })).filter(e => shared || e.charId === S.current).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
   const groups = new Map();
   mine.forEach(e => { const d = new Date(e.createdAt || 0); const k = d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate(); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(e); });
   return [...groups.values()];
@@ -679,7 +835,7 @@ function pageHtml(entries, i, n) {
   const day = entries[0].createdAt;
   return `<div class="page">
     <div class="date"><small>Day ${i + 1} of ${n}</small>${esc(fmtDay(day))}</div>
-    ${entries.map(e => `<div class="pe"><span class="k ${e.type}">${TYPES[e.type] || e.type}${e.where ? ' · ' + esc(e.where) : ''}</span><b>${esc(e.name)}</b>${imgSrc(e) ? `<img class="pic" src="${imgSrc(e)}" alt="">` : ''}${e.summary ? `<span class="s">${esc(e.summary)}</span>` : ''}${e.notes ? `<span class="w">${esc(e.notes)}</span>` : ''}<span class="t">${fmtTime(e.createdAt)}${(e.tags || []).length ? ' · ' + e.tags.map(t => '#' + esc(t)).join(' ') : ''}</span></div>`).join('')}
+    ${entries.map(e => `<div class="pe"><span class="k ${e.type}">${TYPES[e.type] || e.type}${e.where ? ' · ' + esc(e.where) : ''}</span><b>${esc(e.name)}</b>${imgSrc(e) ? `<img class="pic" src="${imgSrc(e)}" alt="">` : ''}${e.summary ? `<span class="s">${esc(e.summary)}</span>` : ''}${e.notes ? `<span class="w">${esc(e.notes)}</span>` : ''}<span class="t">${fmtTime(e.createdAt)}${curCamp() && e.charName ? ' · ' + esc(e.charName) : ''}${(e.tags || []).length ? ' · ' + e.tags.map(t => '#' + esc(t)).join(' ') : ''}</span></div>`).join('')}
     <span class="num">${i + 1} / ${n}</span>
   </div>`;
 }
@@ -720,7 +876,7 @@ $('#book').addEventListener('touchstart', e => { tx = e.touches[0].clientX; }, {
 $('#book').addEventListener('touchend', e => { if (tx == null) return; const dx = e.changedTouches[0].clientX - tx; tx = null; if (Math.abs(dx) > 50) turn(dx < 0 ? 1 : -1); });
 $('#book').addEventListener('click', e => { const pic = e.target.closest('img.pic'); if (pic) { openLightbox(pic.src); return; } const r = $('#book').getBoundingClientRect(); const x = e.clientX - r.left; if (x < r.width * .25) turn(-1); else if (x > r.width * .75) turn(1); });
 
-function renderAll() { renderHeader(); renderChars(); renderEntries(); if (!$('#panel-book').hidden) renderBook(); $('#newEntry').hidden = $('#panel-journal').hidden || !S.current; }
+function renderAll() { renderHeader(); renderChars(); renderEntries(); if (user) { renderCamps(); renderCampOptions(); } if (!$('#panel-book').hidden) renderBook(); $('#newEntry').hidden = $('#panel-journal').hidden || !S.current; }
 
 /* ---------- boot ---------- */
 renderAll();
