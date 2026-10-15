@@ -234,6 +234,10 @@ textarea { min-height: 84px; resize: vertical; }
 .day.has { border-color: var(--season); background: color-mix(in srgb, var(--season) 14%, var(--bg-2)); }
 .day.has::after { background: var(--season); }
 .festival { border-color: var(--season); color: var(--season); }
+.day.turn { box-shadow: inset 0 0 0 2px var(--season); }
+.day.turn::before { content: ""; position: absolute; top: 3px; right: 3px; width: 6px; height: 6px; border-radius: 50%; background: var(--season); }
+.cal-key { display: flex; flex-wrap: wrap; gap: 10px; font-size: .75rem; color: var(--fg-2); }
+.cal-key span { display: inline-flex; align-items: center; gap: 4px; }
 .entry .gdate { color: var(--season); display: inline-flex; gap: 4px; align-items: center; }
 /* on parchment the ink-dark season colours read in both themes */
 .page.s-winter, .page .s-winter { --season: #2f6fb0; } .page.s-spring, .page .s-spring { --season: #2f7f3f; } .page.s-summer, .page .s-summer { --season: #a67400; } .page.s-autumn, .page .s-autumn { --season: #b4501a; }
@@ -299,6 +303,7 @@ textarea { min-height: 84px; resize: vertical; }
         <div class="yr"><input type="number" id="calYear" value="1492" aria-label="Year"><span class="muted">DR</span></div>
       </div>
       <div id="calGrid"></div>
+      <div class="cal-key"><span class="s-winter" style="color:var(--season)">● Winter</span><span class="s-spring" style="color:var(--season)">● Spring</span><span class="s-summer" style="color:var(--season)">● Summer</span><span class="s-autumn" style="color:var(--season)">● Autumn</span><span>◎ Equinox / solstice</span></div>
       <div class="cal-nav"><button id="calPrev">‹ Earlier</button><button id="calNext">Later ›</button></div>
       <div class="daylist" id="calDay"></div>
     </section>
@@ -314,6 +319,7 @@ textarea { min-height: 84px; resize: vertical; }
           <label>D&amp;D Beyond character ID <input type="text" id="cId" inputmode="numeric" placeholder="123456789"></label>
         </div>
         <label>Campaign <select id="cCamp"><option value="">None (private journal)</option></select></label>
+        <div id="cStartWrap"><div class="eyebrow" style="margin-bottom:6px">Private journal start date <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">(campaigns set their own)</span></div><div id="cStart"></div></div>
         <p class="help">The ID is the number at the end of your character's URL on D&amp;D Beyond. It links the journal to that character and gives you a one-tap jump to the sheet. <span id="idHint"></span></p>
         <div class="foot">
           <div id="charDelWrap"></div>
@@ -492,6 +498,8 @@ function renderCamps() {
     return `<div class="camp">
       <div class="hd"><b>${esc(c.name)}</b><span class="code" title="Join code">${esc(c.code)}</span></div>
       <div class="members">${members}</div>
+      <div class="help">Starts ${c.startDate ? '<b style="color:var(--brass)">' + esc(gdStr(c.startDate)) + '</b>' : 'on an unset date'}${owner ? ` · <button class="btn small ghost" data-setdate="${c.id}" style="padding:2px 8px">${c.startDate ? 'Change' : 'Set start date'}</button>` : ''}</div>
+      <div id="sd-${c.id}"></div>
       <div class="actions-row" style="justify-content:flex-start">
         <button class="btn small ghost" data-copy="${esc(c.code)}">Copy code</button>
         ${owner ? `<button class="btn small ghost danger" data-delcamp="${c.id}">Delete campaign</button>` : `<button class="btn small ghost danger" data-leave="${c.id}">Leave</button>`}
@@ -528,7 +536,15 @@ $('#campJoin').onclick = async () => {
 $('#camplist').addEventListener('click', async e => {
   const b = e.target.closest('button'); if (!b) return;
   try {
-    if (b.dataset.copy) { try { await navigator.clipboard.writeText(b.dataset.copy); campMsg('Code copied.'); } catch { campMsg('Code: ' + b.dataset.copy); } }
+    if (b.dataset.setdate) {
+      const cid = b.dataset.setdate, c = S.campaigns[cid];
+      $('#sd-' + cid).innerHTML = gdSelects(c.startDate, 'sd') + `<div class="actions-row" style="justify-content:flex-start;margin-top:8px"><button class="btn primary small" data-savedate="${cid}">Save date</button><button class="btn small ghost" data-canceldate="${cid}">Cancel</button></div>`;
+      $('#sdgD').disabled = isFest(+$('#sdgP').value); $('#sdgP').onchange = () => { $('#sdgD').disabled = isFest(+$('#sdgP').value); };
+    } else if (b.dataset.savedate) {
+      const g = readGd('sd'); if (!g) return;
+      await updateDoc(doc(fs, 'campaigns', b.dataset.savedate), { startDate: g }); campMsg('Start date set to ' + gdStr(g) + '.');
+    } else if (b.dataset.canceldate) { renderCamps(); }
+    else if (b.dataset.copy) { try { await navigator.clipboard.writeText(b.dataset.copy); campMsg('Code copied.'); } catch { campMsg('Code: ' + b.dataset.copy); } }
     else if (b.dataset.leave) {
       if (b.textContent !== 'Really leave?') { b.textContent = 'Really leave?'; return; }
       const cid = b.dataset.leave;
@@ -656,7 +672,7 @@ $('#charlist').addEventListener('click', e => {
 function startEditChar(id) {
   editingChar = id; const c = S.characters[id];
   $('#charFormTitle').textContent = 'Edit character';
-  $('#cName').value = c.name || ''; $('#cSub').value = c.sub || ''; $('#cId').value = c.ddbId || ''; renderCampOptions(); $('#cCamp').value = c.campaignId && S.campaigns[c.campaignId] ? c.campaignId : '';
+  $('#cName').value = c.name || ''; $('#cSub').value = c.sub || ''; $('#cId').value = c.ddbId || ''; renderCampOptions(); fillCStart(c.startDate); $('#cCamp').value = c.campaignId && S.campaigns[c.campaignId] ? c.campaignId : '';
   $('#cCancel').hidden = false;
   $('#charDelWrap').innerHTML = `<button class="btn ghost danger small" id="charDel">Delete</button>`;
   $('#charDel').onclick = () => {
@@ -673,8 +689,15 @@ function startEditChar(id) {
 }
 function resetCharForm() {
   editingChar = null; $('#charFormTitle').textContent = 'Add a character';
-  $('#cName').value = ''; $('#cSub').value = ''; $('#cId').value = ''; $('#cCamp').value = ''; $('#cCancel').hidden = true; $('#charDelWrap').innerHTML = ''; $('#idHint').innerHTML = '';
+  $('#cName').value = ''; $('#cSub').value = ''; $('#cId').value = ''; $('#cCamp').value = ''; fillCStart(null); $('#cCancel').hidden = true; $('#charDelWrap').innerHTML = ''; $('#idHint').innerHTML = '';
 }
+function fillCStart(g) {
+  $('#cStart').innerHTML = gdSelects(g || { y: 1492, p: 0, d: 1 }, 'cs');
+  $('#csgD').disabled = isFest(+$('#csgP').value); $('#csgP').onchange = () => { $('#csgD').disabled = isFest(+$('#csgP').value); };
+  $('#cStartWrap').hidden = !!$('#cCamp').value;
+}
+$('#cCamp').addEventListener('change', () => { $('#cStartWrap').hidden = !!$('#cCamp').value; });
+fillCStart(null);
 $('#cCancel').onclick = resetCharForm;
 $('#cId').addEventListener('input', () => {
   const id = $('#cId').value.replace(/\D/g, ''); $('#cId').value = id;
@@ -685,7 +708,7 @@ $('#cSave').onclick = async () => {
   const id = editingChar || uid();
   const prev = S.characters[id] || {};
   const campaignId = $('#cCamp').value || null;
-  S.characters[id] = { ...prev, name, sub: $('#cSub').value.trim(), ddbId: $('#cId').value.replace(/\D/g, ''), campaignId, createdAt: prev.createdAt || Date.now() };
+  S.characters[id] = { ...prev, name, sub: $('#cSub').value.trim(), ddbId: $('#cId').value.replace(/\D/g, ''), campaignId, startDate: campaignId ? (prev.startDate || null) : readGd('cs'), createdAt: prev.createdAt || Date.now() };
   await put('characters/' + id, S.characters[id]);
   if (!S.current || !editingChar) S.current = id;
   const joinedCamp = campaignId && prev.campaignId !== campaignId;
@@ -894,16 +917,25 @@ const HARPTOS = [
 ];
 const SHIELDMEET = 10;
 const EPITHET = ['Deepwinter', '', 'The Claw of Winter', 'The Claw of Sunsets', 'The Claw of Storms', '', 'The Melting', 'The Time of Flowers', 'Summertide', '', '', 'Highsun', 'The Fading', '', 'Leaffall', 'The Rotting', '', 'The Drawing Down'];
-const SEASON = ['winter', 'winter', 'winter', 'spring', 'spring', 'spring', 'spring', 'summer', 'summer', 'summer', 'summer', 'summer', 'autumn', 'autumn', 'autumn', 'autumn', 'autumn', 'winter'];
+const ord = g => { let o = 0; for (let i = 0; i < g.p; i++) o += HARPTOS[i][1]; return o + (g.d || 1); };
+const pIdx = name => HARPTOS.findIndex(x => x[0] === name);
+const TURNS = [ // the day each season begins (from the Harptos key)
+  ['spring', ord({ p: pIdx('Ches'), d: 19 }), 'Spring Equinox'],
+  ['summer', ord({ p: pIdx('Kythorn'), d: 20 }), 'Summer Solstice'],
+  ['autumn', ord({ p: pIdx('Eleint'), d: 21 }), 'Autumn Equinox'],
+  ['winter', ord({ p: pIdx('Nightal'), d: 20 }), 'Winter Solstice']
+];
+const seasonOfOrd = o => { let sn = 'winter'; for (const [name, start] of TURNS) if (o >= start) sn = name; return sn; };
+const turnName = g => { const o = ord(g); const t = TURNS.find(x => x[1] === o); return t ? t[2] : ''; };
 const GLYPH = {
   winter: '<path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6L5.6 18.4"/>',
   spring: '<path d="M12 21V11M12 11c0-4 3-6 7-6 0 4-3 6-7 6zM12 15c0-3-2.5-5-6-5 0 3 2.5 5 6 5z"/>',
   summer: '<circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>',
   autumn: '<path d="M4 20C8 8 14 5 21 4c-1 7-4 13-16 16zM4 20l9-9"/>'
 };
-const seasonOf = g => g ? SEASON[g.p] : null;
-const sglyph = g => g ? `<svg class="sg" viewBox="0 0 24 24" aria-hidden="true">${GLYPH[SEASON[g.p]]}</svg>` : '';
-const scls = g => g ? 's-' + SEASON[g.p] : '';
+const seasonOf = g => g ? seasonOfOrd(ord(g)) : null;
+const sglyph = g => g ? `<svg class="sg" viewBox="0 0 24 24" aria-hidden="true">${GLYPH[seasonOf(g)]}</svg>` : '';
+const scls = g => g ? 's-' + seasonOf(g) : '';
 const isLeap = y => y % 4 === 0;
 const periodOk = (y, p) => p !== SHIELDMEET || isLeap(y);
 const isFest = p => HARPTOS[p][1] === 1;
@@ -913,27 +945,29 @@ function gdStr(g, short) {
   const [name] = HARPTOS[g.p];
   return isFest(g.p) ? `${name}, ${g.y} DR` : short ? `${g.d} ${name} ${g.y}` : `${g.d} ${name}, ${g.y} DR`;
 }
+function startDate() { const camp = curCamp(); if (camp && camp.startDate) return camp.startDate; const c = curChar(); return c && c.startDate ? c.startDate : null; }
 function latestGameDate() {
-  let best = null;
+  let best = startDate();
   Object.values(S.entries).forEach(e => { if (e.gameDate && (!best || gdKey(e.gameDate) > gdKey(best))) best = e.gameDate; });
   return best;
 }
 function gdSelects(g) {
   g = g || latestGameDate() || { y: 1492, p: 0, d: 1 };
+  const idp = arguments[1] || '';
   return `<div class="gd">
-    <label>Day <select id="gD">${Array.from({ length: 30 }, (_, i) => `<option value="${i + 1}" ${g.d === i + 1 ? 'selected' : ''}>${i + 1}</option>`).join('')}</select></label>
-    <label>Month <select id="gP">${HARPTOS.map(([nm, len], i) => `<option value="${i}" ${g.p === i ? 'selected' : ''}>${nm}${len === 1 ? ' (festival)' : ''}</option>`).join('')}</select></label>
-    <label>Year DR <input type="number" id="gY" value="${g.y}"></label>
+    <label>Day <select id="${idp}gD">${Array.from({ length: 30 }, (_, i) => `<option value="${i + 1}" ${g.d === i + 1 ? 'selected' : ''}>${i + 1}</option>`).join('')}</select></label>
+    <label>Month <select id="${idp}gP">${HARPTOS.map(([nm, len], i) => `<option value="${i}" ${g.p === i ? 'selected' : ''}>${nm}${len === 1 ? ' (festival)' : ''}</option>`).join('')}</select></label>
+    <label>Year DR <input type="number" id="${idp}gY" value="${g.y}"></label>
   </div>`;
 }
-function readGd() {
-  const p = +$('#gP').value, y = parseInt($('#gY').value, 10);
+function readGd(idp = '') {
+  const p = +$('#' + idp + 'gP').value, y = parseInt($('#' + idp + 'gY').value, 10);
   if (isNaN(y)) return null;
-  return { y, p, d: isFest(p) ? 1 : +$('#gD').value };
+  return { y, p, d: isFest(p) ? 1 : +$('#' + idp + 'gD').value };
 }
 
 /* calendar tab */
-let calY = 1492, calP = 0, calSel = null;
+let calY = 1492, calP = 0, calSel = null, calInit = '';
 function entriesOn(g) {
   const shared = !!curCamp(); const k = gdKey(g);
   return Object.entries(S.entries).map(([id, e]) => ({ id, ...e })).filter(e => (shared || e.charId === S.current) && e.gameDate && gdKey(e.gameDate) === k).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
@@ -943,22 +977,25 @@ function calMove(dir) {
   calSel = null; renderCal();
 }
 function renderCal() {
+  const src = (curCamp() ? 'c' + curCamp().id : 'u' + S.current);
+  if (calInit !== src) { calInit = src; const g = latestGameDate(); if (g) { calY = g.y; calP = g.p; calSel = null; } }
   if (!$('#calYear').matches(':focus')) $('#calYear').value = calY;
   const [name, len] = HARPTOS[calP];
   $('#calTitle').innerHTML = esc(name) + (EPITHET[calP] ? `<small>${esc(EPITHET[calP])}</small>` : '<small>Festival</small>');
-  $('#panel-cal').className = 'panel ' + scls({ p: calP });
+  $('#panel-cal').className = 'panel ' + scls({ p: calP, d: 1 });
   const shared = !!curCamp();
   const has = new Set(Object.values(S.entries).filter(e => (shared || e.charId === S.current) && e.gameDate).map(e => gdKey(e.gameDate)));
   let html = '';
   if (len === 1) {
     const g = { y: calY, p: calP, d: 1 }; const k = gdKey(g);
-    html = `<div class="festival ${calSel && gdKey(calSel) === k ? 'sel' : ''}" data-d="1">${name}<small>${has.has(k) ? 'Entries' : 'Festival day'}</small></div>`;
+    html = `<div class="festival ${scls(g)} ${calSel && gdKey(calSel) === k ? 'sel' : ''}" data-d="1">${name}<small>${has.has(k) ? 'Entries' : 'Festival day'}</small></div>`;
   } else {
     html = '<div class="tenday">';
     for (let d = 1; d <= 30; d++) {
       if (d % 10 === 1) html += `<div class="lab">Tenday ${Math.ceil(d / 10)}</div>`;
       const k = gdKey({ y: calY, p: calP, d });
-      html += `<button class="day ${has.has(k) ? 'has' : ''} ${calSel && gdKey(calSel) === k ? 'sel' : ''}" data-d="${d}">${d}</button>`;
+      const tn = turnName({ p: calP, d });
+      html += `<button class="day ${scls({ p: calP, d })} ${has.has(k) ? 'has' : ''} ${calSel && gdKey(calSel) === k ? 'sel' : ''} ${tn ? 'turn' : ''}" data-d="${d}" ${tn ? `title="${tn}"` : ''}>${d}</button>`;
     }
     html += '</div>';
   }
@@ -966,7 +1003,7 @@ function renderCal() {
   const el = $('#calDay');
   if (!calSel) { el.innerHTML = `<div class="help" style="text-align:center">Tap a day to see what happened. Brass dots mark days with entries.</div>`; return; }
   const list = entriesOn(calSel);
-  el.innerHTML = `<div class="dh">${sglyph(calSel)} ${esc(gdStr(calSel))}</div>` + (list.length ? list.map(e => `<article class="entry ${e.type}">
+  el.innerHTML = `<div class="dh ${scls(calSel)}">${sglyph(calSel)} ${esc(gdStr(calSel))}${turnName(calSel) ? ` <small class="muted" style="font-family:var(--body);font-size:.8rem">· ${turnName(calSel)}</small>` : ''}</div>` + (list.length ? list.map(e => `<article class="entry ${e.type}">
       <div class="top-row"><h3>${esc(e.name)}</h3><span class="chip ${e.type}">${TYPES[e.type] || e.type}</span></div>
       ${e.summary ? `<div class="summary">${esc(e.summary)}</div>` : ''}
       <div class="meta">${e.where ? `<span>${esc(e.where)}</span>` : ''}${shared && e.charName ? `<span class="chip">${esc(e.charName)}</span>` : ''}</div>
