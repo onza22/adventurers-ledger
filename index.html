@@ -399,6 +399,66 @@ const STATUS = {
 };
 const CLOSED = ['dead','lost','done','failed'];
 
+const fmtTime = ts => ts ? new Date(ts).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : '';
+const fmtDay = ts => ts ? new Date(ts).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : '';
+/* ---------- Harptos calendar ---------- */
+const HARPTOS = [
+  ['Hammer', 30], ['Midwinter', 1], ['Alturiak', 30], ['Ches', 30], ['Tarsakh', 30], ['Greengrass', 1],
+  ['Mirtul', 30], ['Kythorn', 30], ['Flamerule', 30], ['Midsummer', 1], ['Shieldmeet', 1],
+  ['Eleasis', 30], ['Eleint', 30], ['Highharvestide', 1], ['Marpenoth', 30], ['Uktar', 30], ['Feast of the Moon', 1], ['Nightal', 30]
+];
+const SHIELDMEET = 10;
+const EPITHET = ['Deepwinter', '', 'The Claw of Winter', 'The Claw of Sunsets', 'The Claw of Storms', '', 'The Melting', 'The Time of Flowers', 'Summertide', '', '', 'Highsun', 'The Fading', '', 'Leaffall', 'The Rotting', '', 'The Drawing Down'];
+const ord = g => { let o = 0; for (let i = 0; i < g.p; i++) o += HARPTOS[i][1]; return o + (g.d || 1); };
+const pIdx = name => HARPTOS.findIndex(x => x[0] === name);
+const TURNS = [ // the day each season begins (from the Harptos key)
+  ['spring', ord({ p: pIdx('Ches'), d: 19 }), 'Spring Equinox'],
+  ['summer', ord({ p: pIdx('Kythorn'), d: 20 }), 'Summer Solstice'],
+  ['autumn', ord({ p: pIdx('Eleint'), d: 21 }), 'Autumn Equinox'],
+  ['winter', ord({ p: pIdx('Nightal'), d: 20 }), 'Winter Solstice']
+];
+const seasonOfOrd = o => { let sn = 'winter'; for (const [name, start] of TURNS) if (o >= start) sn = name; return sn; };
+const turnName = g => { const o = ord(g); const t = TURNS.find(x => x[1] === o); return t ? t[2] : ''; };
+const GLYPH = {
+  winter: '<path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6L5.6 18.4"/>',
+  spring: '<path d="M12 21V11M12 11c0-4 3-6 7-6 0 4-3 6-7 6zM12 15c0-3-2.5-5-6-5 0 3 2.5 5 6 5z"/>',
+  summer: '<circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>',
+  autumn: '<path d="M4 20C8 8 14 5 21 4c-1 7-4 13-16 16zM4 20l9-9"/>'
+};
+const seasonOf = g => g ? seasonOfOrd(ord(g)) : null;
+const sglyph = g => g ? `<svg class="sg" viewBox="0 0 24 24" aria-hidden="true">${GLYPH[seasonOf(g)]}</svg>` : '';
+const scls = g => g ? 's-' + seasonOf(g) : '';
+const isLeap = y => y % 4 === 0;
+const periodOk = (y, p) => p !== SHIELDMEET || isLeap(y);
+const isFest = p => HARPTOS[p][1] === 1;
+function gdKey(g) { if (!g) return null; let o = 0; for (let i = 0; i < g.p; i++) o += HARPTOS[i][1]; return g.y * 1000 + o + (g.d || 1); }
+function gdStr(g, short) {
+  if (!g || HARPTOS[g.p] == null) return '';
+  const [name] = HARPTOS[g.p];
+  return isFest(g.p) ? `${name}, ${g.y} DR` : short ? `${g.d} ${name} ${g.y}` : `${g.d} ${name}, ${g.y} DR`;
+}
+function startDate() { const camp = curCamp(); if (camp && camp.startDate) return camp.startDate; const c = curChar(); return c && c.startDate ? c.startDate : null; }
+function latestGameDate() {
+  let best = startDate();
+  Object.values(S.entries).forEach(e => { if (e.gameDate && (!best || gdKey(e.gameDate) > gdKey(best))) best = e.gameDate; });
+  return best;
+}
+function gdSelects(g) {
+  g = g || latestGameDate() || { y: 1492, p: 0, d: 1 };
+  const idp = arguments[1] || '';
+  return `<div class="gd">
+    <label>Day <select id="${idp}gD">${Array.from({ length: 30 }, (_, i) => `<option value="${i + 1}" ${g.d === i + 1 ? 'selected' : ''}>${i + 1}</option>`).join('')}</select></label>
+    <label>Month <select id="${idp}gP">${HARPTOS.map(([nm, len], i) => `<option value="${i}" ${g.p === i ? 'selected' : ''}>${nm}${len === 1 ? ' (festival)' : ''}</option>`).join('')}</select></label>
+    <label>Year DR <input type="number" id="${idp}gY" value="${g.y}"></label>
+  </div>`;
+}
+function readGd(idp = '') {
+  const p = +$('#' + idp + 'gP').value, y = parseInt($('#' + idp + 'gY').value, 10);
+  if (isNaN(y)) return null;
+  return { y, p, d: isFest(p) ? 1 : +$('#' + idp + 'gD').value };
+}
+
+
 /* ---------- images (kept inside the database as small JPEGs) ---------- */
 const imgSrc = e => (e && e.imgData) || '';
 function shrink(file, max, quality) {
@@ -909,63 +969,6 @@ const endDrag = () => {
 document.addEventListener('pointerup', endDrag);
 document.addEventListener('pointercancel', endDrag);
 
-/* ---------- Harptos calendar ---------- */
-const HARPTOS = [
-  ['Hammer', 30], ['Midwinter', 1], ['Alturiak', 30], ['Ches', 30], ['Tarsakh', 30], ['Greengrass', 1],
-  ['Mirtul', 30], ['Kythorn', 30], ['Flamerule', 30], ['Midsummer', 1], ['Shieldmeet', 1],
-  ['Eleasis', 30], ['Eleint', 30], ['Highharvestide', 1], ['Marpenoth', 30], ['Uktar', 30], ['Feast of the Moon', 1], ['Nightal', 30]
-];
-const SHIELDMEET = 10;
-const EPITHET = ['Deepwinter', '', 'The Claw of Winter', 'The Claw of Sunsets', 'The Claw of Storms', '', 'The Melting', 'The Time of Flowers', 'Summertide', '', '', 'Highsun', 'The Fading', '', 'Leaffall', 'The Rotting', '', 'The Drawing Down'];
-const ord = g => { let o = 0; for (let i = 0; i < g.p; i++) o += HARPTOS[i][1]; return o + (g.d || 1); };
-const pIdx = name => HARPTOS.findIndex(x => x[0] === name);
-const TURNS = [ // the day each season begins (from the Harptos key)
-  ['spring', ord({ p: pIdx('Ches'), d: 19 }), 'Spring Equinox'],
-  ['summer', ord({ p: pIdx('Kythorn'), d: 20 }), 'Summer Solstice'],
-  ['autumn', ord({ p: pIdx('Eleint'), d: 21 }), 'Autumn Equinox'],
-  ['winter', ord({ p: pIdx('Nightal'), d: 20 }), 'Winter Solstice']
-];
-const seasonOfOrd = o => { let sn = 'winter'; for (const [name, start] of TURNS) if (o >= start) sn = name; return sn; };
-const turnName = g => { const o = ord(g); const t = TURNS.find(x => x[1] === o); return t ? t[2] : ''; };
-const GLYPH = {
-  winter: '<path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6L5.6 18.4"/>',
-  spring: '<path d="M12 21V11M12 11c0-4 3-6 7-6 0 4-3 6-7 6zM12 15c0-3-2.5-5-6-5 0 3 2.5 5 6 5z"/>',
-  summer: '<circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>',
-  autumn: '<path d="M4 20C8 8 14 5 21 4c-1 7-4 13-16 16zM4 20l9-9"/>'
-};
-const seasonOf = g => g ? seasonOfOrd(ord(g)) : null;
-const sglyph = g => g ? `<svg class="sg" viewBox="0 0 24 24" aria-hidden="true">${GLYPH[seasonOf(g)]}</svg>` : '';
-const scls = g => g ? 's-' + seasonOf(g) : '';
-const isLeap = y => y % 4 === 0;
-const periodOk = (y, p) => p !== SHIELDMEET || isLeap(y);
-const isFest = p => HARPTOS[p][1] === 1;
-function gdKey(g) { if (!g) return null; let o = 0; for (let i = 0; i < g.p; i++) o += HARPTOS[i][1]; return g.y * 1000 + o + (g.d || 1); }
-function gdStr(g, short) {
-  if (!g || HARPTOS[g.p] == null) return '';
-  const [name] = HARPTOS[g.p];
-  return isFest(g.p) ? `${name}, ${g.y} DR` : short ? `${g.d} ${name} ${g.y}` : `${g.d} ${name}, ${g.y} DR`;
-}
-function startDate() { const camp = curCamp(); if (camp && camp.startDate) return camp.startDate; const c = curChar(); return c && c.startDate ? c.startDate : null; }
-function latestGameDate() {
-  let best = startDate();
-  Object.values(S.entries).forEach(e => { if (e.gameDate && (!best || gdKey(e.gameDate) > gdKey(best))) best = e.gameDate; });
-  return best;
-}
-function gdSelects(g) {
-  g = g || latestGameDate() || { y: 1492, p: 0, d: 1 };
-  const idp = arguments[1] || '';
-  return `<div class="gd">
-    <label>Day <select id="${idp}gD">${Array.from({ length: 30 }, (_, i) => `<option value="${i + 1}" ${g.d === i + 1 ? 'selected' : ''}>${i + 1}</option>`).join('')}</select></label>
-    <label>Month <select id="${idp}gP">${HARPTOS.map(([nm, len], i) => `<option value="${i}" ${g.p === i ? 'selected' : ''}>${nm}${len === 1 ? ' (festival)' : ''}</option>`).join('')}</select></label>
-    <label>Year DR <input type="number" id="${idp}gY" value="${g.y}"></label>
-  </div>`;
-}
-function readGd(idp = '') {
-  const p = +$('#' + idp + 'gP').value, y = parseInt($('#' + idp + 'gY').value, 10);
-  if (isNaN(y)) return null;
-  return { y, p, d: isFest(p) ? 1 : +$('#' + idp + 'gD').value };
-}
-
 /* calendar tab */
 let calY = 1492, calP = 0, calSel = null, calInit = '';
 function entriesOn(g) {
@@ -1017,8 +1020,6 @@ $('#calYear').addEventListener('change', () => { const y = parseInt($('#calYear'
 $('#calDay').addEventListener('click', e => { const b = e.target.closest('[data-edit]'); if (!b) return; showTab('journal'); openEditor({ id: b.dataset.edit, ...S.entries[b.dataset.edit] }); });
 
 /* ---------- book ---------- */
-const fmtDay = ts => ts ? new Date(ts).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : '';
-const fmtTime = ts => ts ? new Date(ts).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : '';
 let bookPages = [], bookIdx = 0, flipping = false, bookModeV = 'session';
 try { bookModeV = localStorage.getItem('ledger-bookmode') || 'session'; } catch {}
 $('#bookMode').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.m === bookModeV)));
