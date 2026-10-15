@@ -28,7 +28,7 @@ img { max-width: 100%; }
   --fg: #eef0f3; --fg-2: #9aa3b0; --accent: #d13b3b; --accent-fg: #fff;
   --brass: #d1a650; --good: #5fb36a; --warn: #e0a63c; --bad: #e05454;
   --paper: #ece3cf; --paper-line: #cfc2a3; --ink: #2b2318; --ink-2: #6f6350;
-  --winter: #7fb4e6; --spring: #7fcf8a; --summer: #e8b84a; --autumn: #e07b45;
+  --winter: #7fb4e6; --spring: #7fcf8a; --summer: #e8b84a; --autumn: #e07b45; --event: #b08ae6;
   --display: "Cormorant Garamond", Georgia, serif;
   --body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
   color-scheme: dark;
@@ -37,13 +37,13 @@ img { max-width: 100%; }
   :root:not([data-theme="dark"]) {
     --bg: #f3f1ec; --bg-2: #ffffff; --bg-3: #e9e5dc; --line: #d6d0c3;
     --fg: #1d1a16; --fg-2: #6b655b; --accent: #b3302c; --accent-fg: #fff;
-    --brass: #9a7429; --good: #3f8a4a; --warn: #b7801d; --bad: #b3302c; --paper: #fbf6ea; --paper-line: #d9cfb6; --ink: #2b2318; --ink-2: #6f6350; --winter: #3b7fc4; --spring: #3b8f4a; --summer: #b8860b; --autumn: #c2561e; color-scheme: light;
+    --brass: #9a7429; --good: #3f8a4a; --warn: #b7801d; --bad: #b3302c; --paper: #fbf6ea; --paper-line: #d9cfb6; --ink: #2b2318; --ink-2: #6f6350; --winter: #3b7fc4; --spring: #3b8f4a; --summer: #b8860b; --autumn: #c2561e; --event: #7a4fc4; color-scheme: light;
   }
 }
 :root[data-theme="light"] {
   --bg: #f3f1ec; --bg-2: #ffffff; --bg-3: #e9e5dc; --line: #d6d0c3;
   --fg: #1d1a16; --fg-2: #6b655b; --accent: #b3302c; --accent-fg: #fff;
-  --brass: #9a7429; --good: #3f8a4a; --warn: #b7801d; --bad: #b3302c; --paper: #fbf6ea; --paper-line: #d9cfb6; --ink: #2b2318; --ink-2: #6f6350; --winter: #3b7fc4; --spring: #3b8f4a; --summer: #b8860b; --autumn: #c2561e; color-scheme: light;
+  --brass: #9a7429; --good: #3f8a4a; --warn: #b7801d; --bad: #b3302c; --paper: #fbf6ea; --paper-line: #d9cfb6; --ink: #2b2318; --ink-2: #6f6350; --winter: #3b7fc4; --spring: #3b8f4a; --summer: #b8860b; --autumn: #c2561e; --event: #7a4fc4; color-scheme: light;
 }
 * { box-sizing: border-box; }
 html, body { height: 100%; }
@@ -92,6 +92,12 @@ main { flex: 1; padding: 14px 16px calc(84px + env(safe-area-inset-bottom, 0px))
 .entry.quest::before { background: var(--accent); }
 .entry.item::before { background: var(--fg-2); }
 .entry.map::before { background: var(--good); }
+.entry.event::before { background: var(--event); }
+.chip.event { color: var(--event); border-color: var(--event); background: transparent; }
+.page .pe .k.event { color: var(--event); }
+.seg { overflow-x: auto; scrollbar-width: none; grid-auto-columns: minmax(max-content, 1fr); }
+.seg::-webkit-scrollbar { display: none; }
+.seg button { white-space: nowrap; padding-inline: 10px; }
 .chip.map { color: var(--good); border-color: var(--good); background: transparent; }
 .page .pe .k.map { color: var(--good); }
 .entry.map .pic { max-height: none; object-fit: contain; background: var(--bg-3); cursor: zoom-in; }
@@ -283,6 +289,7 @@ textarea { min-height: 84px; resize: vertical; }
         <button aria-pressed="false" data-f="item">Items</button>
         <button aria-pressed="false" data-f="quest">Quests</button>
         <button aria-pressed="false" data-f="map">Maps</button>
+        <button aria-pressed="false" data-f="event">Encounters</button>
       </div>
       <div class="counts" id="counts"></div>
       <div id="editorSlot"></div>
@@ -390,12 +397,13 @@ const fs = getFirestore(app);
 const $ = (s, r = document) => r.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
-const TYPES = { npc: 'NPC', item: 'Item', quest: 'Quest', map: 'Map' };
+const TYPES = { npc: 'NPC', item: 'Item', quest: 'Quest', map: 'Map', event: 'Encounter' };
 const STATUS = {
   npc: [['friendly','Friendly','ok'],['neutral','Neutral',''],['suspicious','Suspicious','warn'],['hostile','Hostile','bad'],['dead','Dead','']],
   item: [['have','In my pack','ok'],['party','Party has it',''],['seen','Seen / rumoured','warn'],['lost','Lost or sold','']],
   quest: [['active','Active','ok'],['side','Side quest','warn'],['done','Completed',''],['failed','Failed','bad']],
-  map: [['current','Where we are','ok'],['explored','Explored',''],['rumoured','Rumoured','warn'],['old','Out of date','']]
+  map: [['current','Where we are','ok'],['explored','Explored',''],['rumoured','Rumoured','warn'],['old','Out of date','']],
+  event: [['won','Won','ok'],['fled','Fled','warn'],['lost','Lost','bad'],['avoided','Avoided',''],['ongoing','Ongoing','warn']]
 };
 const CLOSED = ['dead','lost','done','failed'];
 
@@ -803,8 +811,8 @@ function openEditor(e) {
         <label>Type <select id="eType">${Object.entries(TYPES).map(([k, v]) => `<option value="${k}" ${k === type ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
         <label>Status <select id="eStatus"></select></label>
       </div>
-      <label>Name <input type="text" id="eName" required value="${esc(e.name)}" placeholder="${type === 'npc' ? 'Garrick the ferryman' : type === 'item' ? 'Cracked amulet of warding' : type === 'map' ? 'Hollowbrook and the marshes' : 'Find the missing caravan'}"></label>
-      <label>In one line <input type="text" id="eSummary" value="${esc(e.summary)}" placeholder="${type === 'npc' ? 'Owes us a favour after the bridge incident' : type === 'item' ? 'Hums near undead; found in the crypt' : type === 'map' ? 'Bought from the cartographer; X marks the old watchtower' : 'From the mayor of Hollowbrook, 200gp reward'}"></label>
+      <label>Name <input type="text" id="eName" required value="${esc(e.name)}" placeholder="${type === 'npc' ? 'Garrick the ferryman' : type === 'item' ? 'Cracked amulet of warding' : type === 'map' ? 'Hollowbrook and the marshes' : type === 'event' ? 'Goblin ambush on the north road' : 'Find the missing caravan'}"></label>
+      <label>In one line <input type="text" id="eSummary" value="${esc(e.summary)}" placeholder="${type === 'npc' ? 'Owes us a favour after the bridge incident' : type === 'item' ? 'Hums near undead; found in the crypt' : type === 'map' ? 'Bought from the cartographer; X marks the old watchtower' : type === 'event' ? 'Six goblins and a worg; Thorn went down, we took one prisoner' : 'From the mayor of Hollowbrook, 200gp reward'}"></label>
       <div class="row">
         <label>Where <input type="text" id="eWhere" value="${esc(e.where)}" placeholder="Hollowbrook, the Drowned Rat"></label>
         <label>Tags <input type="text" id="eTags" value="${esc((e.tags || []).join(', '))}" placeholder="guild, reward"></label>
@@ -883,8 +891,8 @@ function renderEntries() {
   const q = $('#search').value.trim().toLowerCase();
   const shared = !!curCamp();
   const mine = Object.entries(S.entries).map(([id, e]) => ({ id, ...e })).filter(e => shared || e.charId === S.current);
-  const counts = { npc: 0, item: 0, quest: 0, map: 0 }; mine.forEach(e => { if (counts[e.type] != null) counts[e.type]++; });
-  $('#counts').innerHTML = S.current ? `<span><b>${counts.npc}</b> NPCs</span><span><b>${counts.item}</b> items</span><span><b>${counts.quest}</b> quests</span><span><b>${counts.map}</b> maps</span>` : '';
+  const counts = { npc: 0, item: 0, quest: 0, map: 0, event: 0 }; mine.forEach(e => { if (counts[e.type] != null) counts[e.type]++; });
+  $('#counts').innerHTML = S.current ? `<span><b>${counts.npc}</b> NPCs</span><span><b>${counts.item}</b> items</span><span><b>${counts.quest}</b> quests</span><span><b>${counts.map}</b> maps</span><span><b>${counts.event}</b> encounters</span>` : '';
   const list = mine
     .filter(e => filter === 'all' || e.type === filter)
     .filter(e => !q || [e.name, e.summary, e.where, e.notes, gdStr(e.gameDate), (e.tags || []).join(' ')].join(' ').toLowerCase().includes(q))
