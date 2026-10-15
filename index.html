@@ -28,6 +28,7 @@ img { max-width: 100%; }
   --fg: #eef0f3; --fg-2: #9aa3b0; --accent: #d13b3b; --accent-fg: #fff;
   --brass: #d1a650; --good: #5fb36a; --warn: #e0a63c; --bad: #e05454;
   --paper: #ece3cf; --paper-line: #cfc2a3; --ink: #2b2318; --ink-2: #6f6350;
+  --winter: #7fb4e6; --spring: #7fcf8a; --summer: #e8b84a; --autumn: #e07b45;
   --display: "Cormorant Garamond", Georgia, serif;
   --body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
   color-scheme: dark;
@@ -36,13 +37,13 @@ img { max-width: 100%; }
   :root:not([data-theme="dark"]) {
     --bg: #f3f1ec; --bg-2: #ffffff; --bg-3: #e9e5dc; --line: #d6d0c3;
     --fg: #1d1a16; --fg-2: #6b655b; --accent: #b3302c; --accent-fg: #fff;
-    --brass: #9a7429; --good: #3f8a4a; --warn: #b7801d; --bad: #b3302c; --paper: #fbf6ea; --paper-line: #d9cfb6; --ink: #2b2318; --ink-2: #6f6350; color-scheme: light;
+    --brass: #9a7429; --good: #3f8a4a; --warn: #b7801d; --bad: #b3302c; --paper: #fbf6ea; --paper-line: #d9cfb6; --ink: #2b2318; --ink-2: #6f6350; --winter: #3b7fc4; --spring: #3b8f4a; --summer: #b8860b; --autumn: #c2561e; color-scheme: light;
   }
 }
 :root[data-theme="light"] {
   --bg: #f3f1ec; --bg-2: #ffffff; --bg-3: #e9e5dc; --line: #d6d0c3;
   --fg: #1d1a16; --fg-2: #6b655b; --accent: #b3302c; --accent-fg: #fff;
-  --brass: #9a7429; --good: #3f8a4a; --warn: #b7801d; --bad: #b3302c; --paper: #fbf6ea; --paper-line: #d9cfb6; --ink: #2b2318; --ink-2: #6f6350; color-scheme: light;
+  --brass: #9a7429; --good: #3f8a4a; --warn: #b7801d; --bad: #b3302c; --paper: #fbf6ea; --paper-line: #d9cfb6; --ink: #2b2318; --ink-2: #6f6350; --winter: #3b7fc4; --spring: #3b8f4a; --summer: #b8860b; --autumn: #c2561e; color-scheme: light;
 }
 * { box-sizing: border-box; }
 html, body { height: 100%; }
@@ -199,6 +200,48 @@ textarea { min-height: 84px; resize: vertical; }
 .entry .by { font-size: .78rem; color: var(--fg-2); }
 .page .pe .by { font-family: var(--body); font-size: .72rem; color: var(--ink-2); }
 .migrate { background: var(--bg-3); border: 1px solid var(--brass); border-radius: 12px; padding: 12px; display: grid; gap: 8px; }
+/* calendar */
+.cal-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cal-head h2 { font-family: var(--display); font-size: 1.4rem; }
+.cal-head .yr { display: flex; gap: 4px; align-items: center; }
+.cal-head input { width: 80px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; text-align: center; font-variant-numeric: tabular-nums; }
+.cal-nav { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.cal-nav button { background: var(--bg-2); border: 1px solid var(--line); border-radius: 12px; padding: 10px; font-weight: 600; }
+.tenday { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; }
+.tenday .lab { grid-column: 1 / -1; font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; color: var(--fg-2); font-weight: 700; margin-top: 6px; }
+.day { aspect-ratio: 1; border: 1px solid var(--line); background: var(--bg-2); border-radius: 8px; display: grid; place-items: center; position: relative; font-size: .85rem; font-variant-numeric: tabular-nums; padding: 0; }
+.day.has { border-color: var(--brass); font-weight: 700; }
+.day.has::after { content: ""; position: absolute; bottom: 4px; width: 5px; height: 5px; border-radius: 50%; background: var(--brass); }
+.day.sel { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+.day.sel::after { background: var(--accent-fg); }
+.festival { background: var(--bg-2); border: 1px solid var(--brass); border-radius: 12px; padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; gap: 8px; font-family: var(--display); font-weight: 700; font-size: 1.05rem; cursor: pointer; }
+.festival.sel { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+.festival small { font-family: var(--body); font-weight: 600; font-size: .75rem; color: var(--fg-2); }
+.festival.sel small { color: var(--accent-fg); }
+.daylist { display: grid; gap: 8px; }
+.daylist .dh { font-family: var(--display); font-size: 1.25rem; font-weight: 700; }
+.gd { display: grid; grid-template-columns: 1fr 1.6fr 1fr; gap: 8px; }
+.gd-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.entry .gdate { color: var(--brass); font-weight: 600; }
+.book-mode { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; padding: 3px; }
+.book-mode button { background: none; border: 0; border-radius: 8px; padding: 6px; font-weight: 600; color: var(--fg-2); font-size: .85rem; }
+.book-mode button[aria-pressed="true"] { background: var(--bg-3); color: var(--fg); }
+/* seasons */
+.s-winter { --season: var(--winter); } .s-spring { --season: var(--spring); } .s-summer { --season: var(--summer); } .s-autumn { --season: var(--autumn); }
+.sg { width: 1em; height: 1em; vertical-align: -.15em; fill: none; stroke: var(--season); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.cal-head h2 small { display: block; font-family: var(--body); font-size: .72rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--season); }
+.day { color: var(--season); border-color: color-mix(in srgb, var(--season) 35%, var(--line)); }
+.day.has { border-color: var(--season); background: color-mix(in srgb, var(--season) 14%, var(--bg-2)); }
+.day.has::after { background: var(--season); }
+.festival { border-color: var(--season); color: var(--season); }
+.entry .gdate { color: var(--season); display: inline-flex; gap: 4px; align-items: center; }
+/* on parchment the ink-dark season colours read in both themes */
+.page.s-winter, .page .s-winter { --season: #2f6fb0; } .page.s-spring, .page .s-spring { --season: #2f7f3f; } .page.s-summer, .page .s-summer { --season: #a67400; } .page.s-autumn, .page .s-autumn { --season: #b4501a; }
+.page .date { border-bottom-color: var(--season); }
+.page .date small { color: var(--season); display: flex; gap: 6px; align-items: center; }
+.page .date .sg { stroke: var(--season); }
+.page .pe .t .sg { margin-right: 2px; }
+.cal-head .yr input { border-color: var(--season); }
 /* sign-in gate */
 .gate { position: fixed; inset: 0; z-index: 20; background: var(--bg); display: grid; place-items: center; padding: 24px; }
 .gate .box { max-width: 360px; width: 100%; display: grid; gap: 14px; text-align: center; }
@@ -244,9 +287,20 @@ textarea { min-height: 84px; resize: vertical; }
 
     <!-- BOOK -->
     <section class="panel book-wrap" id="panel-book" hidden>
-      <div class="book-head"><div class="eyebrow">By day added</div><div class="pg" id="bookPg"></div></div>
+      <div class="book-head"><div class="book-mode" id="bookMode"><button aria-pressed="true" data-m="session">Sessions</button><button aria-pressed="false" data-m="game">In-game days</button></div><div class="pg" id="bookPg"></div></div>
       <div class="book" id="book"></div>
       <div class="book-nav"><button id="bookPrev">‹ Earlier</button><button id="bookNext">Later ›</button></div>
+    </section>
+
+    <!-- CALENDAR -->
+    <section class="panel" id="panel-cal" hidden>
+      <div class="cal-head">
+        <h2 id="calTitle">Hammer</h2>
+        <div class="yr"><input type="number" id="calYear" value="1492" aria-label="Year"><span class="muted">DR</span></div>
+      </div>
+      <div id="calGrid"></div>
+      <div class="cal-nav"><button id="calPrev">‹ Earlier</button><button id="calNext">Later ›</button></div>
+      <div class="daylist" id="calDay"></div>
     </section>
 
     <!-- CHARACTERS -->
@@ -291,6 +345,7 @@ textarea { min-height: 84px; resize: vertical; }
     <div class="in">
       <button role="tab" id="tab-journal" aria-selected="true" data-tab="journal"><svg viewBox="0 0 24 24"><path d="M4 4h12a2 2 0 0 1 2 2v14H6a2 2 0 0 1-2-2z"/><path d="M4 18a2 2 0 0 1 2-2h12"/><path d="M8 8h6M8 11h4"/></svg>Journal</button>
       <button role="tab" id="tab-book" aria-selected="false" data-tab="book"><svg viewBox="0 0 24 24"><path d="M2 5h7a3 3 0 0 1 3 3v12a2 2 0 0 0-2-2H2z"/><path d="M22 5h-7a3 3 0 0 0-3 3v12a2 2 0 0 1 2-2h8z"/></svg>Book</button>
+      <button role="tab" id="tab-cal" aria-selected="false" data-tab="cal"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Calendar</button>
       <button role="tab" id="tab-chars" aria-selected="false" data-tab="chars"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>Characters</button>
     </div>
   </nav>
@@ -404,7 +459,7 @@ function listenEntries() {
   const col = camp ? collection(fs, 'campaigns', camp.id, 'entries') : userCol('entries');
   unsubEntries = onSnapshot(col, snap => {
     const next = {}; snap.forEach(x => { next[x.id] = x.data(); });
-    S.entries = next; renderEntries(); renderChars(); if (!$('#panel-book').hidden && !flipping) renderBook();
+    S.entries = next; renderEntries(); renderChars(); if (!$('#panel-book').hidden && !flipping) renderBook(); if (!$('#panel-cal').hidden) renderCal();
   }, e => setStatus('Sync error: ' + e.code));
 }
 
@@ -554,9 +609,10 @@ $('#exportBtn').onclick = () => {
 
 /* ---------- tabs ---------- */
 function showTab(name) {
-  ['journal', 'book', 'chars'].forEach(t => { $('#tab-' + t).setAttribute('aria-selected', String(t === name)); $('#panel-' + t).hidden = t !== name; });
+  ['journal', 'book', 'cal', 'chars'].forEach(t => { $('#tab-' + t).setAttribute('aria-selected', String(t === name)); $('#panel-' + t).hidden = t !== name; });
   $('#newEntry').hidden = name !== 'journal' || !S.current;
   if (name === 'book') renderBook(true);
+  if (name === 'cal') renderCal();
   window.scrollTo(0, 0);
 }
 $('.nav').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) showTab(b.dataset.tab); });
@@ -670,6 +726,8 @@ function openEditor(e) {
         <label>Where <input type="text" id="eWhere" value="${esc(e.where)}" placeholder="Hollowbrook, the Drowned Rat"></label>
         <label>Tags <input type="text" id="eTags" value="${esc((e.tags || []).join(', '))}" placeholder="guild, reward"></label>
       </div>
+      <div class="eyebrow">In-game date <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">(optional)</span></div>
+      <div id="gdWrap">${e.gameDate ? gdSelects(e.gameDate) : `<div class="gd-row"><button type="button" class="btn small" id="gdAdd">${latestGameDate() ? 'Set date (last: ' + esc(gdStr(latestGameDate(), true)) + ')' : 'Set date'}</button></div>`}</div>
       <label>Notes <textarea id="eNotes" placeholder="Anything else worth remembering">${esc(e.notes)}</textarea></label>
       <div class="picrow" id="picRow">
         <img class="thumb" id="eThumb" alt="" ${imgSrc(e) ? `src="${imgSrc(e)}"` : 'hidden'}>
@@ -685,6 +743,14 @@ function openEditor(e) {
     </form>`;
   const fillStatus = () => { $('#eStatus').innerHTML = STATUS[$('#eType').value].map(([k, v]) => `<option value="${k}" ${k === e.status ? 'selected' : ''}>${v}</option>`).join(''); };
   fillStatus(); $('#eType').onchange = fillStatus;
+  let gdOn = !!e.gameDate;
+  const wireGd = () => {
+    if ($('#gdAdd')) $('#gdAdd').onclick = () => { gdOn = true; $('#gdWrap').innerHTML = gdSelects(null) + '<div class="gd-row"><button type="button" class="btn small ghost" id="gdClear">No date</button></div>'; wireGd(); };
+    if ($('#gdClear')) $('#gdClear').onclick = () => { gdOn = false; $('#gdWrap').innerHTML = '<div class="gd-row"><button type="button" class="btn small" id="gdAdd">Set date</button></div>'; wireGd(); };
+    if ($('#gP')) $('#gP').onchange = () => { $('#gD').disabled = isFest(+$('#gP').value); };
+  };
+  if (gdOn) $('#gdWrap').innerHTML += '<div class="gd-row"><button type="button" class="btn small ghost" id="gdClear">No date</button></div>';
+  wireGd(); if ($('#gP')) $('#gD').disabled = isFest(+$('#gP').value);
   let pendingImg = { imgData: e.imgData };
   $('#ePick').onclick = () => $('#eFile').click();
   $('#eFile').onchange = async () => {
@@ -712,6 +778,7 @@ function openEditor(e) {
       summary: $('#eSummary').value.trim(), where: $('#eWhere').value.trim(),
       tags: $('#eTags').value.split(',').map(s => s.trim()).filter(Boolean),
       notes: $('#eNotes').value.trim(), createdAt: e.createdAt || Date.now(), updatedAt: Date.now(),
+      gameDate: gdOn ? readGd() : null,
       addedBy: e.addedBy || user.uid, addedByName: e.addedByName || myName(), charName: e.charName || (curChar() ? curChar().name : ''),
       order: e.order ?? Math.min(0, ...Object.values(S.entries).map(x => x.order ?? 0)) - 1,
       imgData: pendingImg.imgData || null
@@ -737,7 +804,7 @@ function renderEntries() {
   $('#counts').innerHTML = S.current ? `<span><b>${counts.npc}</b> NPCs</span><span><b>${counts.item}</b> items</span><span><b>${counts.quest}</b> quests</span><span><b>${counts.map}</b> maps</span>` : '';
   const list = mine
     .filter(e => filter === 'all' || e.type === filter)
-    .filter(e => !q || [e.name, e.summary, e.where, e.notes, (e.tags || []).join(' ')].join(' ').toLowerCase().includes(q))
+    .filter(e => !q || [e.name, e.summary, e.where, e.notes, gdStr(e.gameDate), (e.tags || []).join(' ')].join(' ').toLowerCase().includes(q))
     .sort((a, b) => (a.order ?? -(a.createdAt || 0)) - (b.order ?? -(b.createdAt || 0)));
   const el = $('#entries');
   if (!S.current) { el.innerHTML = '<div class="empty">Add a character first, then start the journal.</div>'; return; }
@@ -751,7 +818,7 @@ function renderEntries() {
       <div class="top-row"><h3>${highlight(e.name, q)}</h3><span class="chip ${e.type}">${TYPES[e.type] || e.type}</span></div>
       ${imgSrc(e) ? `<img class="pic" src="${imgSrc(e)}" alt="" loading="lazy">` : ''}
       ${e.summary ? `<div class="summary">${highlight(e.summary, q)}</div>` : ''}
-      <div class="meta">${st ? `<span class="chip ${st[2]}">${st[1]}</span>` : ''}${e.where ? `<span>${highlight(e.where, q)}</span>` : ''}${(e.tags || []).map(t => `<span class="chip">#${highlight(t, q)}</span>`).join('')}</div>
+      <div class="meta">${st ? `<span class="chip ${st[2]}">${st[1]}</span>` : ''}${e.gameDate ? `<span class="gdate ${scls(e.gameDate)}">${sglyph(e.gameDate)}${esc(gdStr(e.gameDate, true))}</span>` : ''}${e.where ? `<span>${highlight(e.where, q)}</span>` : ''}${(e.tags || []).map(t => `<span class="chip">#${highlight(t, q)}</span>`).join('')}</div>
       ${e.notes ? `<div class="notes">${highlight(e.notes, q)}</div>` : ''}
       <div class="by">${shared && e.addedByName ? `Added by ${esc(e.charName || e.addedByName)}${e.addedBy === user.uid ? ' (you)' : e.charName ? ' (' + esc(e.addedByName) + ')' : ''} · ` : 'Added '}${fmtDay(e.createdAt)}</div>
       <button class="edit" data-edit="${e.id}">Edit</button>
@@ -819,23 +886,133 @@ const endDrag = () => {
 document.addEventListener('pointerup', endDrag);
 document.addEventListener('pointercancel', endDrag);
 
+/* ---------- Harptos calendar ---------- */
+const HARPTOS = [
+  ['Hammer', 30], ['Midwinter', 1], ['Alturiak', 30], ['Ches', 30], ['Tarsakh', 30], ['Greengrass', 1],
+  ['Mirtul', 30], ['Kythorn', 30], ['Flamerule', 30], ['Midsummer', 1], ['Shieldmeet', 1],
+  ['Eleasis', 30], ['Eleint', 30], ['Highharvestide', 1], ['Marpenoth', 30], ['Uktar', 30], ['Feast of the Moon', 1], ['Nightal', 30]
+];
+const SHIELDMEET = 10;
+const EPITHET = ['Deepwinter', '', 'The Claw of Winter', 'The Claw of Sunsets', 'The Claw of Storms', '', 'The Melting', 'The Time of Flowers', 'Summertide', '', '', 'Highsun', 'The Fading', '', 'Leaffall', 'The Rotting', '', 'The Drawing Down'];
+const SEASON = ['winter', 'winter', 'winter', 'spring', 'spring', 'spring', 'spring', 'summer', 'summer', 'summer', 'summer', 'summer', 'autumn', 'autumn', 'autumn', 'autumn', 'autumn', 'winter'];
+const GLYPH = {
+  winter: '<path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6L5.6 18.4"/>',
+  spring: '<path d="M12 21V11M12 11c0-4 3-6 7-6 0 4-3 6-7 6zM12 15c0-3-2.5-5-6-5 0 3 2.5 5 6 5z"/>',
+  summer: '<circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>',
+  autumn: '<path d="M4 20C8 8 14 5 21 4c-1 7-4 13-16 16zM4 20l9-9"/>'
+};
+const seasonOf = g => g ? SEASON[g.p] : null;
+const sglyph = g => g ? `<svg class="sg" viewBox="0 0 24 24" aria-hidden="true">${GLYPH[SEASON[g.p]]}</svg>` : '';
+const scls = g => g ? 's-' + SEASON[g.p] : '';
+const isLeap = y => y % 4 === 0;
+const periodOk = (y, p) => p !== SHIELDMEET || isLeap(y);
+const isFest = p => HARPTOS[p][1] === 1;
+function gdKey(g) { if (!g) return null; let o = 0; for (let i = 0; i < g.p; i++) o += HARPTOS[i][1]; return g.y * 1000 + o + (g.d || 1); }
+function gdStr(g, short) {
+  if (!g || HARPTOS[g.p] == null) return '';
+  const [name] = HARPTOS[g.p];
+  return isFest(g.p) ? `${name}, ${g.y} DR` : short ? `${g.d} ${name} ${g.y}` : `${g.d} ${name}, ${g.y} DR`;
+}
+function latestGameDate() {
+  let best = null;
+  Object.values(S.entries).forEach(e => { if (e.gameDate && (!best || gdKey(e.gameDate) > gdKey(best))) best = e.gameDate; });
+  return best;
+}
+function gdSelects(g) {
+  g = g || latestGameDate() || { y: 1492, p: 0, d: 1 };
+  return `<div class="gd">
+    <label>Day <select id="gD">${Array.from({ length: 30 }, (_, i) => `<option value="${i + 1}" ${g.d === i + 1 ? 'selected' : ''}>${i + 1}</option>`).join('')}</select></label>
+    <label>Month <select id="gP">${HARPTOS.map(([nm, len], i) => `<option value="${i}" ${g.p === i ? 'selected' : ''}>${nm}${len === 1 ? ' (festival)' : ''}</option>`).join('')}</select></label>
+    <label>Year DR <input type="number" id="gY" value="${g.y}"></label>
+  </div>`;
+}
+function readGd() {
+  const p = +$('#gP').value, y = parseInt($('#gY').value, 10);
+  if (isNaN(y)) return null;
+  return { y, p, d: isFest(p) ? 1 : +$('#gD').value };
+}
+
+/* calendar tab */
+let calY = 1492, calP = 0, calSel = null;
+function entriesOn(g) {
+  const shared = !!curCamp(); const k = gdKey(g);
+  return Object.entries(S.entries).map(([id, e]) => ({ id, ...e })).filter(e => (shared || e.charId === S.current) && e.gameDate && gdKey(e.gameDate) === k).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+}
+function calMove(dir) {
+  do { calP += dir; if (calP < 0) { calP = HARPTOS.length - 1; calY--; } if (calP >= HARPTOS.length) { calP = 0; calY++; } } while (!periodOk(calY, calP));
+  calSel = null; renderCal();
+}
+function renderCal() {
+  if (!$('#calYear').matches(':focus')) $('#calYear').value = calY;
+  const [name, len] = HARPTOS[calP];
+  $('#calTitle').innerHTML = esc(name) + (EPITHET[calP] ? `<small>${esc(EPITHET[calP])}</small>` : '<small>Festival</small>');
+  $('#panel-cal').className = 'panel ' + scls({ p: calP });
+  const shared = !!curCamp();
+  const has = new Set(Object.values(S.entries).filter(e => (shared || e.charId === S.current) && e.gameDate).map(e => gdKey(e.gameDate)));
+  let html = '';
+  if (len === 1) {
+    const g = { y: calY, p: calP, d: 1 }; const k = gdKey(g);
+    html = `<div class="festival ${calSel && gdKey(calSel) === k ? 'sel' : ''}" data-d="1">${name}<small>${has.has(k) ? 'Entries' : 'Festival day'}</small></div>`;
+  } else {
+    html = '<div class="tenday">';
+    for (let d = 1; d <= 30; d++) {
+      if (d % 10 === 1) html += `<div class="lab">Tenday ${Math.ceil(d / 10)}</div>`;
+      const k = gdKey({ y: calY, p: calP, d });
+      html += `<button class="day ${has.has(k) ? 'has' : ''} ${calSel && gdKey(calSel) === k ? 'sel' : ''}" data-d="${d}">${d}</button>`;
+    }
+    html += '</div>';
+  }
+  $('#calGrid').innerHTML = html;
+  const el = $('#calDay');
+  if (!calSel) { el.innerHTML = `<div class="help" style="text-align:center">Tap a day to see what happened. Brass dots mark days with entries.</div>`; return; }
+  const list = entriesOn(calSel);
+  el.innerHTML = `<div class="dh">${sglyph(calSel)} ${esc(gdStr(calSel))}</div>` + (list.length ? list.map(e => `<article class="entry ${e.type}">
+      <div class="top-row"><h3>${esc(e.name)}</h3><span class="chip ${e.type}">${TYPES[e.type] || e.type}</span></div>
+      ${e.summary ? `<div class="summary">${esc(e.summary)}</div>` : ''}
+      <div class="meta">${e.where ? `<span>${esc(e.where)}</span>` : ''}${shared && e.charName ? `<span class="chip">${esc(e.charName)}</span>` : ''}</div>
+      <button class="edit" data-edit="${e.id}">Edit</button>
+    </article>`).join('') : '<div class="help">Nothing recorded on this day.</div>');
+}
+$('#calGrid').addEventListener('click', e => { const b = e.target.closest('[data-d]'); if (!b) return; calSel = { y: calY, p: calP, d: +b.dataset.d }; renderCal(); });
+$('#calPrev').onclick = () => calMove(-1);
+$('#calNext').onclick = () => calMove(1);
+$('#calYear').addEventListener('change', () => { const y = parseInt($('#calYear').value, 10); if (!isNaN(y)) { calY = y; if (!periodOk(calY, calP)) calP++; calSel = null; renderCal(); } });
+$('#calDay').addEventListener('click', e => { const b = e.target.closest('[data-edit]'); if (!b) return; showTab('journal'); openEditor({ id: b.dataset.edit, ...S.entries[b.dataset.edit] }); });
+
 /* ---------- book ---------- */
 const fmtDay = ts => ts ? new Date(ts).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : '';
 const fmtTime = ts => ts ? new Date(ts).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : '';
-let bookPages = [], bookIdx = 0, flipping = false;
+let bookPages = [], bookIdx = 0, flipping = false, bookModeV = 'session';
+try { bookModeV = localStorage.getItem('ledger-bookmode') || 'session'; } catch {}
+$('#bookMode').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.m === bookModeV)));
+$('#bookMode').addEventListener('click', e => {
+  const b = e.target.closest('[data-m]'); if (!b) return;
+  bookModeV = b.dataset.m; try { localStorage.setItem('ledger-bookmode', bookModeV); } catch {}
+  $('#bookMode').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  renderBook(true);
+});
 function buildPages() {
   const shared = !!curCamp();
-  const mine = Object.entries(S.entries).map(([id, e]) => ({ id, ...e })).filter(e => shared || e.charId === S.current).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+  const mine = Object.entries(S.entries).map(([id, e]) => ({ id, ...e })).filter(e => shared || e.charId === S.current);
   const groups = new Map();
-  mine.forEach(e => { const d = new Date(e.createdAt || 0); const k = d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate(); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(e); });
+  if (bookModeV === 'game') {
+    mine.sort((a, b) => ((a.gameDate ? gdKey(a.gameDate) : Infinity) - (b.gameDate ? gdKey(b.gameDate) : Infinity)) || (a.createdAt || 0) - (b.createdAt || 0));
+    mine.forEach(e => { const k = e.gameDate ? gdKey(e.gameDate) : 'undated'; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(e); });
+  } else {
+    mine.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+    mine.forEach(e => { const d = new Date(e.createdAt || 0); const k = d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate(); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(e); });
+  }
   return [...groups.values()];
 }
 function pageHtml(entries, i, n) {
   if (!entries) return `<div class="page blank">${S.current ? 'The book is empty. Entries appear here on the day you add them.' : 'Choose a character first.'}</div>`;
-  const day = entries[0].createdAt;
-  return `<div class="page">
-    <div class="date"><small>Day ${i + 1} of ${n}</small>${esc(fmtDay(day))}</div>
-    ${entries.map(e => `<div class="pe"><span class="k ${e.type}">${TYPES[e.type] || e.type}${e.where ? ' · ' + esc(e.where) : ''}</span><b>${esc(e.name)}</b>${imgSrc(e) ? `<img class="pic" src="${imgSrc(e)}" alt="">` : ''}${e.summary ? `<span class="s">${esc(e.summary)}</span>` : ''}${e.notes ? `<span class="w">${esc(e.notes)}</span>` : ''}<span class="t">${fmtTime(e.createdAt)}${curCamp() && e.charName ? ' · ' + esc(e.charName) : ''}${(e.tags || []).length ? ' · ' + e.tags.map(t => '#' + esc(t)).join(' ') : ''}</span></div>`).join('')}
+  const g = entries[0].gameDate;
+  const title = bookModeV === 'game' ? (g ? gdStr(g) : 'Undated') : fmtDay(entries[0].createdAt);
+  const small = bookModeV === 'game' ? (g ? (isFest(g.p) ? 'Festival' : 'Tenday ' + Math.ceil(g.d / 10)) : 'No in-game date yet') : `Session ${i + 1} of ${n}`;
+  const pg = bookModeV === 'game' ? g : null;
+  return `<div class="page ${scls(pg)}">
+    <div class="date"><small>${sglyph(pg)}${small}</small>${esc(title)}</div>
+    ${entries.map(e => `<div class="pe"><span class="k ${e.type}">${TYPES[e.type] || e.type}${e.where ? ' · ' + esc(e.where) : ''}</span><b>${esc(e.name)}</b>${imgSrc(e) ? `<img class="pic" src="${imgSrc(e)}" alt="">` : ''}${e.summary ? `<span class="s">${esc(e.summary)}</span>` : ''}${e.notes ? `<span class="w">${esc(e.notes)}</span>` : ''}<span class="t">${bookModeV === 'game' ? fmtDay(e.createdAt) : fmtTime(e.createdAt)}${bookModeV === 'session' && e.gameDate ? ` · <span class="${scls(e.gameDate)}" style="color:var(--season)">${sglyph(e.gameDate)}${esc(gdStr(e.gameDate, true))}</span>` : ''}${curCamp() && e.charName ? ' · ' + esc(e.charName) : ''}${(e.tags || []).length ? ' · ' + e.tags.map(t => '#' + esc(t)).join(' ') : ''}</span></div>`).join('')}
     <span class="num">${i + 1} / ${n}</span>
   </div>`;
 }
